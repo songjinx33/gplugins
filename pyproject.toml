@@ -15,7 +15,8 @@ classifiers = [
 ]
 dependencies = [
   "gdsfactory>=7.10.1",
-  "pint"
+  "pint",
+  "tqdm"
 ]
 description = "gdsfactory plugins"
 keywords = ["python"]
@@ -23,7 +24,7 @@ license = {file = "LICENSE"}
 name = "gplugins"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "0.9.10"
+version = "0.9.11"
 
 [project.optional-dependencies]
 dagster = ["dagster", "dagit"]
@@ -44,7 +45,7 @@ dev = [
 devsim = [
   "devsim",
   "pyvista<=0.40",
-  "tidy3d==2.5.0"
+  "tidy3d==2.5.2"
 ]
 docs = [
   "jupytext",
@@ -57,7 +58,7 @@ femwell = [
   "meshwell>=1.0.0,<1.1"
 ]
 gmsh = [
-  "gmsh==4.11.1",
+  "gmsh==4.12.1",
   "h5py",
   "mapbox_earcut",
   "meshio",
@@ -74,13 +75,13 @@ klayout = [
 meow = [
   "jaxlib",
   "jax",
-  "meow-sim>0.8,<0.9",
-  "tidy3d==2.5.0"
+  "meow-sim>=0.9.0,<0.10.0",
+  "tidy3d==2.5.2"
 ]
 sax = [
   "jaxlib",
   "jax",
-  "sax>=0.10.3,<0.11.0",
+  "sax>=0.11.1,<0.12.0",
   "scikit-learn"
 ]
 schematic = [
@@ -88,7 +89,7 @@ schematic = [
   "natsort"
 ]
 tidy3d = [
-  "tidy3d==2.5.0",
+  "tidy3d==2.5.2",
   "meshio",
   "meshwell>=1.0.0,<1.1"
 ]
@@ -96,26 +97,6 @@ vlsir = [
   "vlsir>=4.0.0,<6.0.0",
   "vlsirtools>=4.0.0,<6.0.0"
 ]
-
-[tool.black]
-exclude = '''  # Specify the files/dirs that should be ignored by the black formatter
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | env
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-include = '\.pyi?$'
-line-length = 88
-target-version = ['py310']
 
 [tool.codespell]
 ignore-words-list = 'te, te/tm, te, ba, fpr, fpr_spacing, ro, nd, donot, schem, Ue'
@@ -129,6 +110,9 @@ strict = true
 enabled = true
 live_mode = true
 strict = true
+
+[tool.pyright]
+reportUnusedExpression = false
 
 [tool.pytest.ini_options]
 addopts = '--tb=short'
@@ -208,7 +192,7 @@ message_template = "Bump to {new_version}"
 tag_template = "v{new_version}"
 
 [tool.tbump.version]
-current = "0.9.10"
+current = "0.9.11"
 regex = '''
   (?P<major>\d+)
   \.
