@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Literal
+
+import pandas as pd
 from pydantic import BaseModel
 from gdsfactory.component import Component
 from gdsfactory.technology.layer_stack import LayerStack
@@ -52,8 +54,10 @@ def main():
         layer_map,
         run_mesh_convergence=False,
         run_cell_convergence=False,
-        run_mode_convergence=True,
+        run_mode_convergence=False,
     )
+
+    sim.plot_length_sweep()
 
     print("done")
 
@@ -536,6 +540,94 @@ class LumericalEmeSimulation:
             plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(str(self.dirpath / "mode_convergence.png"))
+
+    def get_length_sweep(
+        self,
+        start_length: float = 1,
+        stop_length: float = 100,
+        num_pts: int = 100,
+        group: int = 2,
+    ) -> pd.DataFrame:
+        """
+        Get length sweep sparams.
+
+        Parameters:
+            start_length: Start length (um)
+            stop_length: Stop length (um)
+            num_pts: Number of points along sweep
+            group: Group span to sweep
+
+        Returns:
+            Dataframe with length sweep and complex sparams
+        """
+
+        s = self.session
+        s.run()
+        s.emepropagate()
+
+        # set propagation sweep settings
+        s.setemeanalysis("propagation sweep", 1)
+        s.setemeanalysis("parameter", f"group span {group}")
+        s.setemeanalysis("start", start_length * um)
+        s.setemeanalysis("stop", stop_length * um)
+        s.setemeanalysis("number of points", num_pts)
+
+        s.emesweep()
+
+        S = s.getemesweep("S")
+
+        # Get sparams
+        s21 = list(S["s21"])
+        s22 = list(S["s22"])
+        s11 = list(S["s11"])
+        s12 = list(S["s12"])
+        group_span = list(S[f"group_span_{group}"])
+
+        return pd.DataFrame.from_dict(
+            {
+                "length": group_span,
+                "s11": s11,
+                "s21": s21,
+                "s12": s12,
+                "s22": s22,
+            }
+        )
+
+    def plot_length_sweep(
+        self,
+        start_length: float = 1,
+        stop_length: float = 100,
+        num_pts: int = 100,
+        group: int = 2,
+    ) -> None:
+        """
+        Plot length sweep.
+
+        Parameters:
+            start_length: Start length (um)
+            stop_length: Stop length (um)
+            num_pts: Number of points along sweep
+            group: Group span to sweep
+
+        Returns:
+            Figure handle
+        """
+        sweep_data = self.get_length_sweep(start_length, stop_length, num_pts, group)
+
+        fig = plt.figure()
+        plt.plot(sweep_data.loc[:, "length"] / um, abs(sweep_data.loc[:, "s11"]) ** 2)
+        plt.plot(sweep_data.loc[:, "length"] / um, abs(sweep_data.loc[:, "s21"]) ** 2)
+        plt.plot(sweep_data.loc[:, "length"] / um, abs(sweep_data.loc[:, "s12"]) ** 2)
+        plt.plot(sweep_data.loc[:, "length"] / um, abs(sweep_data.loc[:, "s22"]) ** 2)
+        plt.legend(["|S11|^2", "|S21|^2", "|S12|^2", "|S22|^2"])
+        plt.grid("on")
+        plt.xlabel("Length (um)")
+        plt.ylabel("Magnitude")
+        plt.title(f"Length Sweep | Wavelength={self.simulation_settings.wavelength}um")
+        plt.tight_layout()
+        plt.savefig(str(self.dirpath / "length_sweep.png"))
+
+        return fig
 
 
 if __name__ == "__main__":
