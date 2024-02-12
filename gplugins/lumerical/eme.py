@@ -23,7 +23,6 @@ um = 1e-6
 
 def main():
     from gdsfactory.components.taper_cross_section import taper_cross_section
-    from gdsfactory.cross_section import cross_section
     from functools import partial
 
     xs_wg = partial(
@@ -52,9 +51,9 @@ def main():
     sim = LumericalEmeSimulation(
         taper,
         layer_map,
-        run_mesh_convergence=False,
-        run_cell_convergence=False,
-        run_mode_convergence=False,
+        run_mesh_convergence=True,
+        run_cell_convergence=True,
+        run_mode_convergence=True,
     )
 
     sim.plot_length_sweep()
@@ -171,7 +170,7 @@ class LumericalEmeSimulation:
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
-        hide: bool = False,
+        hide: bool = True,
         run_mesh_convergence: bool = False,
         run_cell_convergence: bool = False,
         run_mode_convergence: bool = False,
