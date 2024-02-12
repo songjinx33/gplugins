@@ -48,7 +48,11 @@ def main():
         "Aluminum": "Al (Aluminium) Palik",
     }
     sim = LumericalEmeSimulation(
-        taper, layer_map, run_mesh_convergence=False, run_cell_convergence=True
+        taper,
+        layer_map,
+        run_mesh_convergence=False,
+        run_cell_convergence=False,
+        run_mode_convergence=True,
     )
 
     print("done")
@@ -139,6 +143,9 @@ class LumericalEmeSimulation:
         convergence_settings: EME convergence settings
         dirpath: Directory where simulation files are saved
         hide: Hide simulation if True, else show GUI
+        run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
+        run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
+        run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
 
     Attributes:
         component: Component geometry to simulate
@@ -163,6 +170,7 @@ class LumericalEmeSimulation:
         hide: bool = False,
         run_mesh_convergence: bool = False,
         run_cell_convergence: bool = False,
+        run_mode_convergence: bool = False,
         **settings,
     ):
         # Set up variables
@@ -285,9 +293,6 @@ class LumericalEmeSimulation:
         z = (component_zmin + component_thickness) / 2 * um
         z_span = (2 * ss.zmargin + component_thickness) * um
 
-        x_span = x_max - x_min
-        y_span = y_max - y_min
-
         s.addeme()
         s.set("display cells", 1)
         s.set("x min", x_min)
@@ -347,12 +352,25 @@ class LumericalEmeSimulation:
         s.save(str(dirpath / f"{component.name}.lms"))
 
         if run_mesh_convergence:
-            self.update_mesh_convergence(plot=True)
+            self.update_mesh_convergence(plot=not hide)
 
         if run_cell_convergence:
-            self.update_cell_convergence(plot=True)
+            self.update_cell_convergence(plot=not hide)
+
+        if run_mode_convergence:
+            self.update_mode_convergence(plot=not hide)
+
+        if not hide:
+            plt.show()
 
     def update_mesh_convergence(self, plot: bool = False):
+        """
+        Update simulation based on mesh convergence testing. Updates both Lumerical session and simulation settings.
+
+        Parameters:
+            plot: Plot and save convergence results
+        """
+
         s = self.session
         cs = self.convergence_settings
         ss = self.simulation_settings
@@ -401,6 +419,14 @@ class LumericalEmeSimulation:
             plt.savefig(str(self.dirpath / "mesh_convergence.png"))
 
     def update_cell_convergence(self, plot: bool = False):
+        """
+        Update simulation based on cell convergence testing (number of slices across the device center).
+        Updates both Lumerical session and simulation settings.
+
+
+        Parameters:
+            plot: Plot and save convergence results
+        """
         s = self.session
         cs = self.convergence_settings
         ss = self.simulation_settings
@@ -453,7 +479,63 @@ class LumericalEmeSimulation:
             plt.savefig(str(self.dirpath / "cell_convergence.png"))
 
     def update_mode_convergence(self, plot: bool = False):
-        pass
+        """
+        Update simulation based on mode convergence testing (number of modes required to be accurate).
+        Updates both Lumerical session and simulation settings.
+
+        Parameters:
+            plot: Plot and save convergence results
+        """
+        s = self.session
+        cs = self.convergence_settings
+        ss = self.simulation_settings
+
+        converged = False
+        while not converged:
+            s.switchtolayout()
+            s.setnamed("EME", "number of modes for all cell groups", ss.num_modes)
+            s.run()
+            s.emepropagate()
+
+            s.setemeanalysis("Mode convergence sweep", 1)
+            s.emesweep("mode convergence sweep")
+
+            # get mode convergence sweep result
+            S = s.getemesweep("S_mode_convergence_sweep")
+
+            # plot S21 vs number of modes
+            s21 = abs(S["s21"]) ** 2
+            s11 = abs(S["s11"]) ** 2
+            modes = S["modes"]
+
+            # Check whether convergence has been reached
+            if len(s21) > cs.passes or len(s11) > cs.passes:
+                # Calculate maximum diff in sparams
+                sparam_diff = max(
+                    [
+                        max(np.diff(s21[-(cs.passes + 1) : -1])),
+                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                    ]
+                )
+                if sparam_diff < cs.sparam_diff:
+                    converged = True
+                    break
+                else:
+                    converged = False
+
+            ss.num_modes += 5
+
+        if plot:
+            plt.figure()
+            plt.plot(modes, s21)
+            plt.plot(modes, s11)
+            plt.legend(["|S21|^2", "|S11|^2"])
+            plt.grid("on")
+            plt.xlabel("Number of Modes")
+            plt.ylabel("Magnitude")
+            plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
+            plt.tight_layout()
+            plt.savefig(str(self.dirpath / "mode_convergence.png"))
 
 
 if __name__ == "__main__":
