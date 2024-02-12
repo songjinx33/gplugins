@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 
 um = 1e-6
 
+
 def main():
     from gdsfactory.components.taper_cross_section import taper_cross_section
     from gdsfactory.cross_section import cross_section
@@ -35,7 +36,9 @@ def main():
         width=2.0,
     )
 
-    taper = taper_cross_section(cross_section1=xs_wg, cross_section2=xs_wg_wide, length=5)
+    taper = taper_cross_section(
+        cross_section1=xs_wg, cross_section2=xs_wg_wide, length=5
+    )
 
     layer_map = {
         "si": "Si (Silicon) - Palik",
@@ -44,9 +47,12 @@ def main():
         "TiN": "TiN - Palik",
         "Aluminum": "Al (Aluminium) Palik",
     }
-    sim = LumericalEmeSimulation(taper, layer_map, run_mesh_convergence=True)
+    sim = LumericalEmeSimulation(
+        taper, layer_map, run_mesh_convergence=False, run_cell_convergence=True
+    )
 
-    print('done')
+    print("done")
+
 
 class SimulationSettingsLumericalEme(BaseModel):
     """Lumerical EME simulation_settings.
@@ -100,7 +106,6 @@ class SimulationSettingsLumericalEme(BaseModel):
     ymargin: float = 2.0
     zmargin: float = 1.0
 
-
     class Config:
         """pydantic basemodel config."""
 
@@ -120,7 +125,7 @@ LUMERICAL_EME_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalEme()
 
 
 class LumericalEmeSimulation:
-    '''
+    """
     Lumerical EME simulation
 
     Set up EME simulation based on component geometry and simulation settings. Optionally, run convergence.
@@ -144,7 +149,7 @@ class LumericalEmeSimulation:
         convergence_settings: EME convergence settings
         dirpath: Directory where simulation files are saved
 
-    '''
+    """
 
     def __init__(
         self,
@@ -157,6 +162,7 @@ class LumericalEmeSimulation:
         dirpath: PathType | None = "",
         hide: bool = False,
         run_mesh_convergence: bool = False,
+        run_cell_convergence: bool = False,
         **settings,
     ):
         # Set up variables
@@ -179,9 +185,11 @@ class LumericalEmeSimulation:
 
         # Check number of cell groups are aligned
         if not (len(ss.group_cells) == len(ss.group_subcell_methods)):
-            raise ValueError(f'Number of cell groups are not aligned.\n' +
-                             f'Group Cells ({len(ss.group_cells)}): {ss.group_cells}\n' +
-                             f'Group Subcell Methods ({len(ss.group_subcell_methods)}): {ss.group_subcell_methods}')
+            raise ValueError(
+                f"Number of cell groups are not aligned.\n"
+                + f"Group Cells ({len(ss.group_cells)}): {ss.group_cells}\n"
+                + f"Group Subcell Methods ({len(ss.group_subcell_methods)}): {ss.group_subcell_methods}"
+            )
 
         layerstack = layerstack or get_layer_stack()
 
@@ -281,24 +289,26 @@ class LumericalEmeSimulation:
         y_span = y_max - y_min
 
         s.addeme()
-        s.set('display cells', 1)
-        s.set('x min', x_min)
-        s.set('y min', y_min)
-        s.set('y max', y_max)
-        s.set('z', z)
-        s.set('z span', z_span)
+        s.set("display cells", 1)
+        s.set("x min", x_min)
+        s.set("y min", y_min)
+        s.set("y max", y_max)
+        s.set("z", z)
+        s.set("z span", z_span)
 
-        s.set('wavelength', ss.wavelength * um)
-        s.setemeanalysis('Wavelength sweep', 1)
-        s.setemeanalysis('start wavelength', ss.wavelength_start)
-        s.setemeanalysis('stop wavelength', ss.wavelength_stop)
+        s.set("wavelength", ss.wavelength * um)
+        s.setemeanalysis("Wavelength sweep", 1)
+        s.setemeanalysis("start wavelength", ss.wavelength_start)
+        s.setemeanalysis("stop wavelength", ss.wavelength_stop)
 
-        s.set('number of cell groups', len(ss.group_cells))
-        s.set('cells', np.array(ss.group_cells))
+        s.set("number of cell groups", len(ss.group_cells))
+        s.set("cells", np.array(ss.group_cells))
 
         # Use component bounds for the group spans
         group_spans = []
-        mid_span = (x_max - x_min - 2 * ss.port_extension * um) / (len(ss.group_cells) - 2)
+        mid_span = (x_max - x_min - 2 * ss.port_extension * um) / (
+            len(ss.group_cells) - 2
+        )
         for i in range(0, len(ss.group_cells)):
             if i == 0 or i == len(ss.group_cells) - 1:
                 group_spans.append(ss.port_extension * um)
@@ -306,40 +316,41 @@ class LumericalEmeSimulation:
                 group_spans.append(mid_span)
         group_spans = np.array(group_spans)
 
-        s.set('group spans', group_spans)
+        s.set("group spans", group_spans)
 
         # Convert subcell methods to int for Lumerical to interpret
         # 1 = CVCS, 0 = none
         subcell_methods = []
         for method in ss.group_subcell_methods:
-            if method == 'CVCS':
+            if method == "CVCS":
                 subcell_methods.append(1)
             else:
                 subcell_methods.append(0)
-        s.set('subcell method', np.array(subcell_methods))
+        s.set("subcell method", np.array(subcell_methods))
 
-        s.set('number of modes for all cell groups', ss.num_modes)
-        s.set('energy conservation', ss.energy_conservation)
+        s.set("number of modes for all cell groups", ss.num_modes)
+        s.set("energy conservation", ss.energy_conservation)
 
-        s.set('define y mesh by', 'maximum mesh step')
-        s.set('define z mesh by', 'maximum mesh step')
+        s.set("define y mesh by", "maximum mesh step")
+        s.set("define z mesh by", "maximum mesh step")
 
-        s.set('dy', ss.wavelength / ss.mesh_cells_per_wavelength * um)
-        s.set('dz', ss.wavelength / ss.mesh_cells_per_wavelength * um)
+        s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
+        s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
 
-        s.set('y min bc', ss.ymin_boundary)
-        s.set('y max bc', ss.ymax_boundary)
-        s.set('z min bc', ss.zmin_boundary)
-        s.set('z max bc', ss.zmax_boundary)
+        s.set("y min bc", ss.ymin_boundary)
+        s.set("y max bc", ss.ymax_boundary)
+        s.set("z min bc", ss.zmin_boundary)
+        s.set("z max bc", ss.zmax_boundary)
 
-        s.set('pml layers', ss.pml_layers)
+        s.set("pml layers", ss.pml_layers)
 
-        s.save(str(dirpath / f'{component.name}.lms'))
+        s.save(str(dirpath / f"{component.name}.lms"))
 
         if run_mesh_convergence:
-            self.update_mesh_convergence(plot = True)
+            self.update_mesh_convergence(plot=True)
 
-        if run_
+        if run_cell_convergence:
+            self.update_cell_convergence(plot=True)
 
     def update_mesh_convergence(self, plot: bool = False):
         s = self.session
@@ -352,8 +363,8 @@ class LumericalEmeSimulation:
         converged = False
         while not converged:
             s.switchtolayout()
-            s.set('dy', ss.wavelength / ss.mesh_cells_per_wavelength * um)
-            s.set('dz', ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
             # Get sparams and refine mesh
             s.run()
             s.emepropagate()
@@ -367,7 +378,12 @@ class LumericalEmeSimulation:
             # Check whether convergence has been reached
             if len(s21) > cs.passes or len(s11) > cs.passes:
                 # Calculate maximum diff in sparams
-                sparam_diff = max([max(np.diff(s21[-(cs.passes + 1):-1])), max(np.diff(s11[-(cs.passes + 1):-1]))])
+                sparam_diff = max(
+                    [
+                        max(np.diff(s21[-(cs.passes + 1) : -1])),
+                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                    ]
+                )
                 if sparam_diff < cs.sparam_diff:
                     converged = True
                 else:
@@ -377,16 +393,64 @@ class LumericalEmeSimulation:
             plt.figure()
             plt.plot(mesh_cells_per_wavl, s21)
             plt.plot(mesh_cells_per_wavl, s11)
-            plt.legend(['|S21|^2', '|S11|^2'])
-            plt.grid('on')
-            plt.xlabel('Mesh Cells Per Wavelength')
-            plt.ylabel('Magnitude')
-            plt.title(f'Mesh Convergence Wavelength={ss.wavelength}um')
-            plt.savefig(str(self.dirpath / 'mesh_convergence.png'))
+            plt.legend(["|S21|^2", "|S11|^2"])
+            plt.grid("on")
+            plt.xlabel("Mesh Cells Per Wavelength")
+            plt.ylabel("Magnitude")
+            plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
+            plt.savefig(str(self.dirpath / "mesh_convergence.png"))
 
     def update_cell_convergence(self, plot: bool = False):
-        pass
+        s = self.session
+        cs = self.convergence_settings
+        ss = self.simulation_settings
 
+        s21 = []
+        s11 = []
+        num_cells = []
+        converged = False
+        while not converged:
+            s.switchtolayout()
+            s.setnamed("EME", "cells", np.array(ss.group_cells))
+            s.run()
+            s.emepropagate()
+            S = s.getresult("EME", "user s matrix")
+            s11.append(abs(S[0, 0]) ** 2)
+            s21.append(abs(S[1, 0]) ** 2)
+            num_cells.append(ss.group_cells[1:-1])
+
+            for i in range(1, len(ss.group_cells) - 1):
+                ss.group_cells[i] += 1
+
+            # Check whether convergence has been reached
+            if len(s21) > cs.passes or len(s11) > cs.passes:
+                # Calculate maximum diff in sparams
+                sparam_diff = max(
+                    [
+                        max(np.diff(s21[-(cs.passes + 1) : -1])),
+                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                    ]
+                )
+                if sparam_diff < cs.sparam_diff:
+                    converged = True
+                else:
+                    converged = False
+
+        if plot:
+            num_cells = np.array(num_cells)
+
+            plt.figure()
+            plt.plot(list(num_cells[:, 0]), s21)
+            plt.plot(list(num_cells[:, 0]), s11)
+            plt.xticks(list(num_cells[:, 0]), [f"{list(row)}" for row in num_cells])
+            plt.setp(plt.xticks()[1], rotation=75, horizontalalignment="center")
+            plt.legend(["|S21|^2", "|S11|^2"])
+            plt.grid("on")
+            plt.xlabel("Number of Cells")
+            plt.ylabel("Magnitude")
+            plt.title(f"Cell Convergence | Wavelength={ss.wavelength}um")
+            plt.tight_layout()
+            plt.savefig(str(self.dirpath / "cell_convergence.png"))
 
     def update_mode_convergence(self, plot: bool = False):
         pass
@@ -394,7 +458,3 @@ class LumericalEmeSimulation:
 
 if __name__ == "__main__":
     main()
-
-
-
-
