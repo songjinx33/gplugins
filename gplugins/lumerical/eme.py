@@ -367,12 +367,15 @@ class LumericalEmeSimulation:
         if not hide:
             plt.show()
 
-    def update_mesh_convergence(self, plot: bool = False):
+    def update_mesh_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
         Update simulation based on mesh convergence testing. Updates both Lumerical session and simulation settings.
 
         Parameters:
             plot: Plot and save convergence results
+
+        Returns:
+            Convergence results
         """
 
         s = self.session
@@ -422,14 +425,20 @@ class LumericalEmeSimulation:
             plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
             plt.savefig(str(self.dirpath / "mesh_convergence.png"))
 
-    def update_cell_convergence(self, plot: bool = False):
+        return pd.DataFrame.from_dict(
+            {"num_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
+        )
+
+    def update_cell_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
         Update simulation based on cell convergence testing (number of slices across the device center).
         Updates both Lumerical session and simulation settings.
 
-
         Parameters:
             plot: Plot and save convergence results
+
+        Returns:
+            Convergence results
         """
         s = self.session
         cs = self.convergence_settings
@@ -482,13 +491,20 @@ class LumericalEmeSimulation:
             plt.tight_layout()
             plt.savefig(str(self.dirpath / "cell_convergence.png"))
 
-    def update_mode_convergence(self, plot: bool = False):
+        return pd.DataFrame.from_dict(
+            {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
+        )
+
+    def update_mode_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
         Update simulation based on mode convergence testing (number of modes required to be accurate).
         Updates both Lumerical session and simulation settings.
 
         Parameters:
             plot: Plot and save convergence results
+
+        Returns:
+            Convergence results
         """
         s = self.session
         cs = self.convergence_settings
@@ -540,6 +556,10 @@ class LumericalEmeSimulation:
             plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(str(self.dirpath / "mode_convergence.png"))
+
+        return pd.DataFrame.from_dict(
+            {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
+        )
 
     def get_length_sweep(
         self,
