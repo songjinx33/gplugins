@@ -14,6 +14,7 @@ import math
 import lumapi
 import gdsfactory as gf
 import numpy as np
+import matplotlib.pyplot as plt
 
 um = 1e-6
 
@@ -43,7 +44,7 @@ def main():
         "TiN": "TiN - Palik",
         "Aluminum": "Al (Aluminium) Palik",
     }
-    sim = LumericalEmeSimulation(taper, layer_map)
+    sim = LumericalEmeSimulation(taper, layer_map, run_mesh_convergence=True)
 
     print('done')
 
@@ -76,10 +77,9 @@ class SimulationSettingsLumericalEme(BaseModel):
     wavelength_stop: float = 1.6
     material_fit_tolerance: float = 0.001
 
-    group_cells: list[int] = [1, 50, 1]
-    group_spans: list[float] = [1, 10, 1]
+    group_cells: list[int] = [1, 30, 1]
     group_subcell_methods: list[Literal["CVCS"] | None] = [None, "CVCS", None]
-    num_modes: int = 50
+    num_modes: int = 30
     energy_conservation: Literal[
         "make passive", "conserve energy"
     ] | None = "make passive"
@@ -107,7 +107,8 @@ class SimulationSettingsLumericalEme(BaseModel):
         arbitrary_types_allowed = True
 
 
-class ConvergenceSettingsLumericalEme(BaseModel)
+class ConvergenceSettingsLumericalEme(BaseModel):
+    passes: int = 10
     sparam_diff: float = 0.01
 
     class Config:
@@ -155,6 +156,7 @@ class LumericalEmeSimulation:
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
         hide: bool = False,
+        run_mesh_convergence: bool = False,
         **settings,
     ):
         # Set up variables
@@ -176,9 +178,8 @@ class LumericalEmeSimulation:
         ss = SimulationSettingsLumericalEme(**simulation_settings)
 
         # Check number of cell groups are aligned
-        if not (len(ss.group_spans) == len(ss.group_cells) == len(ss.group_subcell_methods)):
+        if not (len(ss.group_cells) == len(ss.group_subcell_methods)):
             raise ValueError(f'Number of cell groups are not aligned.\n' +
-                             f'Group Spans ({len(ss.group_spans)}): {ss.group_spans}\n' +
                              f'Group Cells ({len(ss.group_cells)}): {ss.group_cells}\n' +
                              f'Group Subcell Methods ({len(ss.group_subcell_methods)}): {ss.group_subcell_methods}')
 
@@ -287,7 +288,7 @@ class LumericalEmeSimulation:
         s.set('z', z)
         s.set('z span', z_span)
 
-        s.set('wavelength', ss.wavelength)
+        s.set('wavelength', ss.wavelength * um)
         s.setemeanalysis('Wavelength sweep', 1)
         s.setemeanalysis('start wavelength', ss.wavelength_start)
         s.setemeanalysis('stop wavelength', ss.wavelength_stop)
@@ -295,19 +296,15 @@ class LumericalEmeSimulation:
         s.set('number of cell groups', len(ss.group_cells))
         s.set('cells', np.array(ss.group_cells))
 
-        # If sum of group spans is larger than component bound, use component bounds for the group spans
-        # Else use the simulation settings group spans
+        # Use component bounds for the group spans
         group_spans = []
-        if x_min + sum(ss.group_spans) * um > x_max:
-            mid_span = (x_max - x_min - 2 * ss.port_extension * um) / (len(ss.group_cells) - 2)
-            for i in range(0, len(ss.group_cells)):
-                if i == 0 or i == len(ss.group_cells) - 1:
-                    group_spans.append(ss.port_extension * um)
-                else:
-                    group_spans.append(mid_span)
-            group_spans = np.array(group_spans)
-        else:
-            group_spans = np.array(ss.group_spans) * um
+        mid_span = (x_max - x_min - 2 * ss.port_extension * um) / (len(ss.group_cells) - 2)
+        for i in range(0, len(ss.group_cells)):
+            if i == 0 or i == len(ss.group_cells) - 1:
+                group_spans.append(ss.port_extension * um)
+            else:
+                group_spans.append(mid_span)
+        group_spans = np.array(group_spans)
 
         s.set('group spans', group_spans)
 
@@ -336,6 +333,63 @@ class LumericalEmeSimulation:
         s.set('z max bc', ss.zmax_boundary)
 
         s.set('pml layers', ss.pml_layers)
+
+        s.save(str(dirpath / f'{component.name}.lms'))
+
+        if run_mesh_convergence:
+            self.update_mesh_convergence(plot = True)
+
+        if run_
+
+    def update_mesh_convergence(self, plot: bool = False):
+        s = self.session
+        cs = self.convergence_settings
+        ss = self.simulation_settings
+
+        s21 = []
+        s11 = []
+        mesh_cells_per_wavl = []
+        converged = False
+        while not converged:
+            s.switchtolayout()
+            s.set('dy', ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            s.set('dz', ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            # Get sparams and refine mesh
+            s.run()
+            s.emepropagate()
+            S = s.getresult("EME", "user s matrix")
+            s11.append(abs(S[0, 0]) ** 2)
+            s21.append(abs(S[1, 0]) ** 2)
+            mesh_cells_per_wavl.append(ss.mesh_cells_per_wavelength)
+
+            ss.mesh_cells_per_wavelength += 1
+
+            # Check whether convergence has been reached
+            if len(s21) > cs.passes or len(s11) > cs.passes:
+                # Calculate maximum diff in sparams
+                sparam_diff = max([max(np.diff(s21[-(cs.passes + 1):-1])), max(np.diff(s11[-(cs.passes + 1):-1]))])
+                if sparam_diff < cs.sparam_diff:
+                    converged = True
+                else:
+                    converged = False
+
+        if plot:
+            plt.figure()
+            plt.plot(mesh_cells_per_wavl, s21)
+            plt.plot(mesh_cells_per_wavl, s11)
+            plt.legend(['|S21|^2', '|S11|^2'])
+            plt.grid('on')
+            plt.xlabel('Mesh Cells Per Wavelength')
+            plt.ylabel('Magnitude')
+            plt.title(f'Mesh Convergence Wavelength={ss.wavelength}um')
+            plt.savefig(str(self.dirpath / 'mesh_convergence.png'))
+
+    def update_cell_convergence(self, plot: bool = False):
+        pass
+
+
+    def update_mode_convergence(self, plot: bool = False):
+        pass
 
 
 if __name__ == "__main__":
