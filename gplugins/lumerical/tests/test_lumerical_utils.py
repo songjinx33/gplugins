@@ -1,8 +1,13 @@
-from gplugins.lumerical.utils import to_lbr
+from gplugins.lumerical.utils import layerstack_to_lbr
 from gdsfactory.technology.layer_stack import LayerStack, LayerLevel
+from gdsfactory.config import logger
+from gplugins.lumerical.config import DEBUG_LUMERICAL, ENABLE_DOPING
 
 
-def test_to_lbr():
+def test_layerstack_to_lbr():
+    """
+    Ensure process file generated from function is importable in MODE, FDTD, and CHARGE.
+    """
     # Inputs
     layer_map = {
         "si": "Si (Silicon) - Palik",
@@ -201,10 +206,7 @@ def test_to_lbr():
         }
     )
 
-    # Create LBR process file
-    process_file_lumerical2021 = to_lbr(layer_map, layerstack=layerstack_lumerical2021)
-
-    # Check process file in Lumerical MODE
+    # Check process file in Lumerical MODE, FDTD, and CHARGE
     try:
         import lumapi
     except Exception as err:
@@ -214,30 +216,41 @@ def test_to_lbr():
 
     success = False
     message = ""
-    try:
-        mode = lumapi.MODE(hide=False)
-        mode.addlayerbuilder()
-        mode.loadprocessfile(str(process_file_lumerical2021))
-        success = success or True
-        message += "\nSUCCESS: Passives only process file successfully loaded."
-    except Exception as err:
-        success = success or False
-        message += f"\n{err}\nWARNING: Passives only process file unsucessfully loaded."
-    mode.close()
 
-    # Create LBR process file
-    process_file_lumerical2023 = to_lbr(layer_map, layerstack=layerstack_lumerical2023)
+    sessions = [
+        lumapi.MODE(hide=not DEBUG_LUMERICAL),
+        lumapi.FDTD(hide=not DEBUG_LUMERICAL),
+        lumapi.DEVICE(hide=not DEBUG_LUMERICAL),
+    ]
+    for s in sessions:
+        # Create LBR process file
+        process_file_lumerical2021 = layerstack_to_lbr(
+            layer_map, layerstack=layerstack_lumerical2021
+        )
+        try:
+            s.addlayerbuilder()
+            s.loadprocessfile(str(process_file_lumerical2021))
+            success = success or True
+            message += f"\nSUCCESS ({type(s)}): Passives only process file successfully loaded."
+        except Exception as err:
+            success = success or False
+            message += f"\n{err}\nWARNING ({type(s)}): Passives only process file unsucessfully loaded."
 
-    try:
-        mode = lumapi.MODE(hide=False)
-        mode.addlayerbuilder()
-        mode.loadprocessfile(str(process_file_lumerical2023))
-        success = success or True
-        message += "\nSUCCESS: Passives and dopants process file successfully loaded."
-    except Exception as err:
-        success = success or False
-        message += f"\nWARNING: {err}\nPassives and dopants process file unsucessfully loaded. Lumerical 2021 version does not support dopants."
-    mode.close()
+        if ENABLE_DOPING:
+            # Create LBR process file
+            process_file_lumerical2023 = layerstack_to_lbr(
+                layer_map, layerstack=layerstack_lumerical2023
+            )
+
+            try:
+                s.addlayerbuilder()
+                s.loadprocessfile(str(process_file_lumerical2023))
+                success = success or True
+                message += f"\nSUCCESS ({type(s)}): Passives and dopants process file successfully loaded."
+            except Exception as err:
+                success = success or False
+                message += f"\nWARNING ({type(s)}): {err}\nPassives and dopants process file unsucessfully loaded. Lumerical 2021 version does not support dopants."
+        s.close()
 
     if success:
         message += (
@@ -245,5 +258,5 @@ def test_to_lbr():
             + "\nThis is used to capture Lumerical versions 2021 that only work with passive only process files "
             + "and subsequent versions of Lumerical that support both passives and dopants."
         )
-    print(message)
+    logger.info(message)
     assert success, message
