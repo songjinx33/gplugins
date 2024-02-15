@@ -9,7 +9,7 @@ from gdsfactory.technology.layer_stack import LayerStack
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.typings import PathType
 from gdsfactory.config import logger
-from gplugins.lumerical.utils import to_lbr
+from gplugins.lumerical.utils import layerstack_to_lbr, draw_geometry
 from pathlib import Path
 
 import math
@@ -54,6 +54,7 @@ def main():
         run_mesh_convergence=True,
         run_cell_convergence=True,
         run_mode_convergence=True,
+        hide=False,
     )
 
     sim.plot_length_sweep()
@@ -244,15 +245,10 @@ class LumericalEmeSimulation:
         component_extended_beyond_pml.name = "top"
         gdspath = component_extended_beyond_pml.write_gds()
 
-        process_file_path = to_lbr(material_map, layerstack, dirpath)
+        process_file_path = layerstack_to_lbr(material_map, layerstack, dirpath)
 
         # Create device geometry
-        s.addlayerbuilder()
-        s.set("x", 0)
-        s.set("y", 0)
-        s.set("z", 0)
-        s.loadgdsfile(str(gdspath))
-        s.loadprocessfile(str(dirpath / "process.lbr"))
+        draw_geometry(s, gdspath, process_file_path)
 
         # Fit material models
         for layer_name in layerstack.to_dict():
@@ -474,9 +470,8 @@ class LumericalEmeSimulation:
                 else:
                     converged = False
 
+        num_cells = np.array(num_cells)
         if plot:
-            num_cells = np.array(num_cells)
-
             plt.figure()
             plt.plot(list(num_cells[:, 0]), s21)
             plt.plot(list(num_cells[:, 0]), s11)
