@@ -1,10 +1,13 @@
-from gplugins.lumerical.eme import LumericalEmeSimulation
 import gdsfactory as gf
+
+from gplugins.lumerical.config import DEBUG_LUMERICAL
+from gplugins.lumerical.eme import LumericalEmeSimulation
 
 
 def test_lumerical_eme_simulation_setup():
-    from gdsfactory.components.taper_cross_section import taper_cross_section
     from functools import partial
+
+    from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(
         gf.cross_section.cross_section,
@@ -36,6 +39,7 @@ def test_lumerical_eme_simulation_setup():
         run_mesh_convergence=True,
         run_cell_convergence=True,
         run_mode_convergence=True,
+        hide=not DEBUG_LUMERICAL,
     )
 
     sim.plot_length_sweep()

@@ -1,29 +1,42 @@
+"""
+Lumerical EME Plugin
+
+Author: Sean Lam
+Contact: seanl@ece.ubc.ca
+"""
+
 from __future__ import annotations
 
-from typing import Literal
-
-import pandas as pd
-from pydantic import BaseModel
-from gdsfactory.component import Component
-from gdsfactory.technology.layer_stack import LayerStack
-from gdsfactory.pdk import get_layer_stack
-from gdsfactory.typings import PathType
-from gdsfactory.config import logger
-from gplugins.lumerical.utils import layerstack_to_lbr, draw_geometry
 from pathlib import Path
 
-import math
-import lumapi
 import gdsfactory as gf
-import numpy as np
+import lumapi
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from gdsfactory.component import Component
+from gdsfactory.config import logger
+from gdsfactory.pdk import get_layer_stack
+from gdsfactory.technology.layer_stack import LayerStack
+from gdsfactory.typings import PathType
+
+from gplugins.lumerical.convergence_settings import (
+    LUMERICAL_EME_CONVERGENCE_SETTINGS,
+    ConvergenceSettingsLumericalEme,
+)
+from gplugins.lumerical.simulation_settings import (
+    LUMERICAL_EME_SIMULATION_SETTINGS,
+    SimulationSettingsLumericalEme,
+)
+from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
 
 um = 1e-6
 
 
 def main():
-    from gdsfactory.components.taper_cross_section import taper_cross_section
     from functools import partial
+
+    from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(
         gf.cross_section.cross_section,
@@ -60,76 +73,6 @@ def main():
     sim.plot_length_sweep()
 
     print("done")
-
-
-class SimulationSettingsLumericalEme(BaseModel):
-    """Lumerical EME simulation_settings.
-
-    Parameters:
-        wavelength: Wavelength (um)
-        wavelength_start: Starting wavelength in wavelength range (um)
-        wavelength_stop: Stopping wavelength in wavelength range (um)
-        material_fit_tolerance: Material fit coefficient
-        group_cells: Number of cells in each group
-        group_spans: Span size in each group (um)
-        group_subcell_methods: Methods to analyze each cross section
-        num_modes: Number of modes
-        energy_conservation: Ensure results are passive or conserve energy.
-        mesh_cells_per_wavelength: Number of mesh cells per wavelength
-        ymin_boundary: y min boundary condition
-        ymax_boundary: y max boundary condition
-        zmin_boundary: z min boundary condition
-        zmax_boundary: z max boundary condition
-        port_extension: Port extension beyond the simulation boundary (um)
-        pml_layers: Number of PML layers used if PML boundary conditions used.
-        ymargin: Y margin from component to simulation boundary (um)
-        zmargin: Z margin from component to simulation boundary (um)
-    """
-
-    wavelength: float = 1.55
-    wavelength_start: float = 1.5
-    wavelength_stop: float = 1.6
-    material_fit_tolerance: float = 0.001
-
-    group_cells: list[int] = [1, 30, 1]
-    group_subcell_methods: list[Literal["CVCS"] | None] = [None, "CVCS", None]
-    num_modes: int = 30
-    energy_conservation: Literal[
-        "make passive", "conserve energy"
-    ] | None = "make passive"
-
-    mesh_cells_per_wavelength: int = 50
-
-    ymin_boundary: Literal[
-        "Metal", "PML", "Anti-Symmetric", "Symmetric"
-    ] = "Anti-Symmetric"
-    ymax_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
-    zmin_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
-    zmax_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
-
-    port_extension: float = 1.0
-
-    pml_layers: int = 12
-
-    ymargin: float = 2.0
-    zmargin: float = 1.0
-
-    class Config:
-        """pydantic basemodel config."""
-
-        arbitrary_types_allowed = True
-
-
-class ConvergenceSettingsLumericalEme(BaseModel):
-    passes: int = 10
-    sparam_diff: float = 0.01
-
-    class Config:
-        arbitrary_types_allowed = True
-
-
-LUMERICAL_EME_SIMULATION_SETTINGS = SimulationSettingsLumericalEme()
-LUMERICAL_EME_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalEme()
 
 
 class LumericalEmeSimulation:
@@ -198,7 +141,7 @@ class LumericalEmeSimulation:
         # Check number of cell groups are aligned
         if not (len(ss.group_cells) == len(ss.group_subcell_methods)):
             raise ValueError(
-                f"Number of cell groups are not aligned.\n"
+                "Number of cell groups are not aligned.\n"
                 + f"Group Cells ({len(ss.group_cells)}): {ss.group_cells}\n"
                 + f"Group Subcell Methods ({len(ss.group_subcell_methods)}): {ss.group_subcell_methods}"
             )

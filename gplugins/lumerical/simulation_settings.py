@@ -1,3 +1,7 @@
+from typing import Literal
+
+from pydantic import BaseModel
+
 simulation_settings_fdtd = [
     "allow grading in x",
     "allow grading in y",
@@ -127,3 +131,64 @@ simulation_settings_fdtd = [
     "use mesh step for metals",
     "use relative coordinates",
 ]
+
+
+class SimulationSettingsLumericalEme(BaseModel):
+    """Lumerical EME simulation_settings.
+
+    Parameters:
+        wavelength: Wavelength (um)
+        wavelength_start: Starting wavelength in wavelength range (um)
+        wavelength_stop: Stopping wavelength in wavelength range (um)
+        material_fit_tolerance: Material fit coefficient
+        group_cells: Number of cells in each group
+        group_spans: Span size in each group (um)
+        group_subcell_methods: Methods to analyze each cross section
+        num_modes: Number of modes
+        energy_conservation: Ensure results are passive or conserve energy.
+        mesh_cells_per_wavelength: Number of mesh cells per wavelength
+        ymin_boundary: y min boundary condition
+        ymax_boundary: y max boundary condition
+        zmin_boundary: z min boundary condition
+        zmax_boundary: z max boundary condition
+        port_extension: Port extension beyond the simulation boundary (um)
+        pml_layers: Number of PML layers used if PML boundary conditions used.
+        ymargin: Y margin from component to simulation boundary (um)
+        zmargin: Z margin from component to simulation boundary (um)
+    """
+
+    wavelength: float = 1.55
+    wavelength_start: float = 1.5
+    wavelength_stop: float = 1.6
+    material_fit_tolerance: float = 0.001
+
+    group_cells: list[int] = [1, 30, 1]
+    group_subcell_methods: list[Literal["CVCS"] | None] = [None, "CVCS", None]
+    num_modes: int = 30
+    energy_conservation: Literal[
+        "make passive", "conserve energy"
+    ] | None = "make passive"
+
+    mesh_cells_per_wavelength: int = 50
+
+    ymin_boundary: Literal[
+        "Metal", "PML", "Anti-Symmetric", "Symmetric"
+    ] = "Anti-Symmetric"
+    ymax_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
+    zmin_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
+    zmax_boundary: Literal["Metal", "PML", "Anti-Symmetric", "Symmetric"] = "Metal"
+
+    port_extension: float = 1.0
+
+    pml_layers: int = 12
+
+    ymargin: float = 2.0
+    zmargin: float = 1.0
+
+    class Config:
+        """pydantic basemodel config."""
+
+        arbitrary_types_allowed = True
+
+
+LUMERICAL_EME_SIMULATION_SETTINGS = SimulationSettingsLumericalEme()
