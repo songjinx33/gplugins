@@ -1,7 +1,8 @@
-from gplugins.lumerical.utils import layerstack_to_lbr
-from gdsfactory.technology.layer_stack import LayerStack, LayerLevel
 from gdsfactory.config import logger
+from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+
 from gplugins.lumerical.config import DEBUG_LUMERICAL, ENABLE_DOPING
+from gplugins.lumerical.utils import layerstack_to_lbr
 
 
 def test_layerstack_to_lbr():
@@ -210,20 +211,20 @@ def test_layerstack_to_lbr():
     try:
         import lumapi
     except Exception as err:
-        assert (
-            False
-        ), f"{err}\nUnable to import lumapi. Check sys.path for location to lumapi.py."
+        raise AssertionError(
+            f"{err}\nUnable to import lumapi. Check sys.path for location to lumapi.py."
+        ) from err
 
-    success = False
     message = ""
-
     sessions = [
         lumapi.MODE(hide=not DEBUG_LUMERICAL),
         lumapi.FDTD(hide=not DEBUG_LUMERICAL),
         lumapi.DEVICE(hide=not DEBUG_LUMERICAL),
     ]
     for s in sessions:
-        # Create LBR process file
+        success = False
+
+        # Create passive LBR process file
         process_file_lumerical2021 = layerstack_to_lbr(
             layer_map, layerstack=layerstack_lumerical2021
         )
@@ -234,10 +235,10 @@ def test_layerstack_to_lbr():
             message += f"\nSUCCESS ({type(s)}): Passives only process file successfully loaded."
         except Exception as err:
             success = success or False
-            message += f"\n{err}\nWARNING ({type(s)}): Passives only process file unsucessfully loaded."
+            message += f"\n{err}\nWARNING ({type(s)}): Passives only process file failed to load."
 
         if ENABLE_DOPING:
-            # Create LBR process file
+            # Create passive and dopant LBR process file
             process_file_lumerical2023 = layerstack_to_lbr(
                 layer_map, layerstack=layerstack_lumerical2023
             )
@@ -249,8 +250,12 @@ def test_layerstack_to_lbr():
                 message += f"\nSUCCESS ({type(s)}): Passives and dopants process file successfully loaded."
             except Exception as err:
                 success = success or False
-                message += f"\nWARNING ({type(s)}): {err}\nPassives and dopants process file unsucessfully loaded. Lumerical 2021 version does not support dopants."
+                message += f"\nWARNING ({type(s)}): {err}\nPassives and dopants process file failed to load. Lumerical 2021 version does not support dopants."
         s.close()
+
+        # If process file cannot be imported into particular Lumerical simulator, raise error
+        if not success:
+            raise AssertionError(f"Process file cannot be imported into {type(s)}")
 
     if success:
         message += (
