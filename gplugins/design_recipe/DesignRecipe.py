@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Optional
 from gdsfactory import Component
-from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.path import hashlib
+from gdsfactory.pdk import LayerStack, get_layer_stack
 
 import gplugins.design_recipe as dr
 
@@ -12,7 +11,7 @@ class DesignRecipe:
     """
     A DesignRecipe represents a flow of operations on GDSFactory components,
     with zero or more dependencies. Note that dependencies are assumed to be independent,
-    dependent dependencies should be nested. When `eval()`ed, A DesignRecipe `eval()`s 
+    dependent dependencies should be nested. When `eval()`ed, A DesignRecipe `eval()`s
     its dependencies if they they've become stale,
     and optionally executes some tool-specific functionality.
     For example,an FdtdDesignRecipe might simulate its `component` in
@@ -26,16 +25,18 @@ class DesignRecipe:
     last_hash: int
 
     # The component this DesignRecipe operates on. This is not necessarily
-    # the same `component` refered to in the `dependencies` recipes.
-    component: Optional[Component] = None
+    # the same `component` referred to in the `dependencies` recipes.
+    component: Component | None = None
 
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
 
-    def __init__(self,
-                 component: Component,
-                 layer_stack: LayerStack = get_layer_stack(),
-                 dependencies: List[dr.DesignRecipe] = []):
+    def __init__(
+        self,
+        component: Component,
+        dependencies: list[dr.DesignRecipe],
+        layer_stack: LayerStack = get_layer_stack(),
+    ):
         self.dependencies = dr.ConstituentRecipes(dependencies)
         self.component = component
         self.last_hash = -1
@@ -44,16 +45,14 @@ class DesignRecipe:
     def __hash__(self) -> int:
         """
         Returns a hash of all state this DesignRecipe contains.
-        Subclasses should include functionality-specific state (e.g. fdtd settings) here. 
+        Subclasses should include functionality-specific state (e.g. fdtd settings) here.
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
         """
         h = hashlib.sha1()
-        if (self.component is not None):
-            h.update(
-                self.component.hash_geometry(precision=1e-4).encode('utf-8'))
-        h.update(
-            self.layer_stack.hash_geometry(precision=1e-4).encode('utf-8'))
-        return int.from_bytes(h.digest(), 'big')
+        if self.component is not None:
+            h.update(self.component.hash_geometry(precision=1e-4).encode("utf-8"))
+        h.update(self.layer_stack.hash_geometry(precision=1e-4).encode("utf-8"))
+        return int.from_bytes(h.digest(), "big")
 
     def is_fresh(self) -> bool:
         """
@@ -61,12 +60,13 @@ class DesignRecipe:
         This could be either caused by this DesignRecipe's
         configuration being changed, or that of one of its dependencies.
         """
-        return hash(self) == self.last_hash and \
-            all([recipe.is_fresh() for recipe in self.dependencies])
+        return hash(self) == self.last_hash and all(
+            recipe.is_fresh() for recipe in self.dependencies
+        )
 
     def eval(self, force_rerun_all=False) -> bool:
         """
-        Evaluate this DesignRecipe. This should be overriden by
+        Evaluate this DesignRecipe. This should be overridden by
         subclasses with their specific functionalities
         (e.g. run the fdtd engine).
         Here we only evaluate dependencies,
@@ -74,8 +74,8 @@ class DesignRecipe:
         """
         success = self.eval_dependencies(force_rerun_all)
 
-# TODO find some way to automatically hook into eval()'s subclasses
-# and update last_hash  at the end? can maybe use decorators?
+        # TODO find some way to automatically hook into eval()'s subclasses
+        # and update last_hash  at the end? can maybe use decorators?
         self.last_hash = hash(self)
         return success
 

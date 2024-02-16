@@ -51,7 +51,10 @@ def main():
     )
 
     taper = taper_cross_section(
-        cross_section1=xs_wg, cross_section2=xs_wg_wide, length=5
+        cross_section1=xs_wg,
+        cross_section2=xs_wg_wide,
+        length=5,
+        width_type="parabolic",
     )
 
     layer_map = {
@@ -64,13 +67,14 @@ def main():
     sim = LumericalEmeSimulation(
         taper,
         layer_map,
-        run_mesh_convergence=True,
-        run_cell_convergence=True,
-        run_mode_convergence=True,
+        run_mesh_convergence=False,
+        run_cell_convergence=False,
+        run_mode_convergence=False,
         hide=False,
     )
 
-    sim.plot_length_sweep()
+    sim.plot_mode_coupling(1, 10)
+    # sim.plot_length_sweep()
 
     print("done")
 
@@ -361,7 +365,9 @@ class LumericalEmeSimulation:
             plt.xlabel("Mesh Cells Per Wavelength")
             plt.ylabel("Magnitude")
             plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
-            plt.savefig(str(self.dirpath / "mesh_convergence.png"))
+            plt.savefig(
+                str(self.dirpath / f"{self.component.name}_mesh_convergence.png")
+            )
 
         return pd.DataFrame.from_dict(
             {"num_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
@@ -426,7 +432,9 @@ class LumericalEmeSimulation:
             plt.ylabel("Magnitude")
             plt.title(f"Cell Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
-            plt.savefig(str(self.dirpath / "cell_convergence.png"))
+            plt.savefig(
+                str(self.dirpath / f"{self.component.name}_cell_convergence.png")
+            )
 
         return pd.DataFrame.from_dict(
             {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
@@ -492,7 +500,9 @@ class LumericalEmeSimulation:
             plt.ylabel("Magnitude")
             plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
-            plt.savefig(str(self.dirpath / "mode_convergence.png"))
+            plt.savefig(
+                str(self.dirpath / f"{self.component.name}_mode_convergence.png")
+            )
 
         return pd.DataFrame.from_dict(
             {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
@@ -582,9 +592,213 @@ class LumericalEmeSimulation:
         plt.ylabel("Magnitude")
         plt.title(f"Length Sweep | Wavelength={self.simulation_settings.wavelength}um")
         plt.tight_layout()
-        plt.savefig(str(self.dirpath / "length_sweep.png"))
+        plt.savefig(str(self.dirpath / f"{self.component.name}_length_sweep.png"))
 
         return fig
+
+    def get_mode_coupling(
+        self, input_mode: int, max_coupled_mode: int = None, group: int = 1
+    ) -> dict[str, pd.DataFrame]:
+        """
+        Get mode coupling coefficients from the input_mode to the max_coupled_mode.
+        Mode numbers start from 1 (fundamental mode).
+
+        Parameters:
+            input_mode: Mode of interest. Energy couples away from this mode to other modes.
+            max_coupled_mode: Maximum mode number to consider; all modes below this mode will be considered as well.
+            group: Group of cells to consider. First group is 0.
+
+        Returns:
+            Dictionary of coupling coefficients vs. position along device:
+            1. forward_sparam - Forward sparam coupling (dB)
+            2. backward_sparam Backward sparam coupling (dB)
+            3. overlap - Overlap integrals (dB)
+            4. position - Position along device (m)
+        """
+
+        s = self.session
+        ss = self.simulation_settings
+        max_coupled_mode = max_coupled_mode or ss.num_modes
+
+        if s.layoutmode():
+            s.run()
+        s.emepropagate()
+
+        # Get starting point for number of cell and group span
+        cells = [int(val[0]) for val in s.getnamed("EME", "cells")]
+        num_cells = cells[group]
+        group_span = round(s.getnamed("EME", "group spans")[group][0], 15)
+        cell_start = 0
+        for i in range(0, group):
+            cell_start += cells[i]
+
+        ## Extract backward coupling coefficients
+        for i in range(cell_start + 1, num_cells + cell_start + 1):
+            # Get Column 0 Data: S[:,0]
+            # Get Row 0 Data: S[0,:]
+            S = s.getresult(f"EME::Cells::cell_{i}", f"S_{i}_{i+1}")
+
+            # Get coupling based on S parameters and overlap coefficients
+            if i == cell_start + 1:
+                # Create initial column
+                S_bcoupling = np.c_[
+                    10 * np.log10(abs(S[0:max_coupled_mode, input_mode - 1]) ** 2)
+                ]
+            else:
+                # Populate subsequent columns
+                S_bcoupling = np.c_[
+                    S_bcoupling,
+                    10 * np.log10(abs(S[0:+max_coupled_mode, input_mode - 1]) ** 2),
+                ]
+
+        ## Extract forward coupling coefficients and overlap coefficients
+        for i in range(cell_start + 1, num_cells + cell_start + 1):
+            # Get Column 0 Data: S[:,0]
+            # Get Row 0 Data: S[0,:]
+            S = s.getresult(f"EME::Cells::cell_{i}", f"S_{i}_{i+1}".format(i, i + 1))
+            overlap = s.getresult(f"EME::Cells::cell_{i}", f"overlap_{i}_{i+1}")
+
+            # Get coupling based on S parameters and overlap coefficients
+            if i == cell_start + 1:
+                # Create initial column
+                S_fcoupling = np.c_[
+                    10
+                    * np.log10(
+                        abs(
+                            S[
+                                ss.num_modes : ss.num_modes + max_coupled_mode,
+                                input_mode - 1,
+                            ]
+                        )
+                        ** 2
+                    )
+                ]
+                overlap_coupling = np.c_[
+                    10 * np.log10(abs(overlap[0:max_coupled_mode, input_mode - 1]) ** 2)
+                ]
+            else:
+                # Populate subsequent columns
+                S_fcoupling = np.c_[
+                    S_fcoupling,
+                    10
+                    * np.log10(
+                        abs(
+                            S[
+                                ss.num_modes : ss.num_modes + max_coupled_mode,
+                                input_mode - 1,
+                            ]
+                        )
+                        ** 2
+                    ),
+                ]
+                overlap_coupling = np.c_[
+                    overlap_coupling,
+                    10
+                    * np.log10(abs(overlap[0:max_coupled_mode, input_mode - 1]) ** 2),
+                ]
+
+        position = np.linspace(0, group_span, num_cells + 1)[1:]
+
+        coupling_coefficients = {
+            "forward_sparam": pd.DataFrame.from_dict(
+                {
+                    f"mode{i}": list(S_fcoupling[i, :])
+                    for i in range(0, S_fcoupling.shape[0])
+                }
+            ),
+            "backward_sparam": pd.DataFrame.from_dict(
+                {
+                    f"mode{i}": list(S_bcoupling[i, :])
+                    for i in range(0, S_bcoupling.shape[0])
+                }
+            ),
+            "overlap": pd.DataFrame.from_dict(
+                {
+                    f"mode{i}": list(overlap_coupling[i, :])
+                    for i in range(0, overlap_coupling.shape[0])
+                }
+            ),
+            "position": pd.DataFrame.from_dict({"position": list(position)}),
+        }
+
+        return coupling_coefficients
+
+    def plot_mode_coupling(
+        self, input_mode: int, max_coupled_mode: int = None, group: int = 1
+    ) -> None:
+        marker_list = [
+            "o",
+            "v",
+            "^",
+            "<",
+            ">",
+            "1",
+            "2",
+            "3",
+            "4",
+            "s",
+            "p",
+            "P",
+            "*",
+            "h",
+            "+",
+            "X",
+            "D",
+        ] * 10
+        coupling_coefficients = self.get_mode_coupling(
+            input_mode, max_coupled_mode, group
+        )
+
+        fig, axs = plt.subplots(3)
+        fig.set_size_inches(8, 9)
+        legend = []
+        for i in range(0, len(coupling_coefficients["forward_sparam"].columns)):
+            axs[0].plot(
+                coupling_coefficients["position"],
+                coupling_coefficients["forward_sparam"].iloc[:, i],
+                marker=marker_list[i],
+            )
+            legend.append(coupling_coefficients["forward_sparam"].columns[i])
+        axs[0].grid("on")
+        axs[0].set_title("Forward Propagating S-Parameters")
+        axs[0].set_ylabel("Magnitude (dB)")
+        axs[0].set_xlabel("Position (m)")
+
+        legend = []
+        for i in range(0, len(coupling_coefficients["backward_sparam"].columns)):
+            axs[1].plot(
+                coupling_coefficients["position"],
+                coupling_coefficients["backward_sparam"].iloc[:, i],
+                marker=marker_list[i],
+            )
+            legend.append(coupling_coefficients["backward_sparam"].columns[i])
+        axs[1].grid("on")
+        axs[1].set_title("Backward Propagating S-Parameters")
+        axs[1].set_ylabel("Magnitude (dB)")
+        axs[1].set_xlabel("Position (m)")
+
+        legend = []
+        for i in range(0, len(coupling_coefficients["overlap"].columns)):
+            axs[2].plot(
+                coupling_coefficients["position"],
+                coupling_coefficients["overlap"].iloc[:, i],
+                marker=marker_list[i],
+            )
+            legend.append(coupling_coefficients["overlap"].columns[i])
+        axs[2].grid("on")
+        axs[2].set_title("Overlap Coefficients")
+        axs[2].set_ylabel("Magnitude (dB)")
+        axs[2].set_xlabel("Position (m)")
+        fig.legend(legend, loc="center right", bbox_to_anchor=(1.15, 0.5))
+        fig.suptitle(
+            f"Coupling From Mode {input_mode} to Modes Up To Mode {max_coupled_mode}"
+        )
+        fig.tight_layout()
+
+        fig.savefig(
+            str(self.dirpath / f"{self.component.name}_mode_coupling.png"),
+            bbox_inches="tight",
+        )
 
 
 if __name__ == "__main__":
