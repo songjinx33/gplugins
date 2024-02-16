@@ -31,6 +31,25 @@ from gplugins.lumerical.simulation_settings import (
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
 
 um = 1e-6
+marker_list = [
+    "o",
+    "v",
+    "^",
+    "<",
+    ">",
+    "1",
+    "2",
+    "3",
+    "4",
+    "s",
+    "p",
+    "P",
+    "*",
+    "h",
+    "+",
+    "X",
+    "D",
+] * 10
 
 
 def main():
@@ -73,8 +92,9 @@ def main():
         hide=False,
     )
 
-    sim.plot_mode_coupling(1, 10)
+    # sim.plot_mode_coupling(1, 10)
     # sim.plot_length_sweep()
+    sim.plot_neff_vs_position()
 
     print("done")
 
@@ -611,9 +631,17 @@ class LumericalEmeSimulation:
         Returns:
             Dictionary of coupling coefficients vs. position along device:
             1. forward_sparam - Forward sparam coupling (dB)
+            | mode1 | mode2 | ...
+            | float | float | ...
             2. backward_sparam Backward sparam coupling (dB)
+            | mode1 | mode2 | ...
+            | float | float | ...
             3. overlap - Overlap integrals (dB)
+            | mode1 | mode2 | ...
+            | float | float | ...
             4. position - Position along device (m)
+            | position |
+            | float    |
         """
 
         s = self.session
@@ -702,19 +730,19 @@ class LumericalEmeSimulation:
         coupling_coefficients = {
             "forward_sparam": pd.DataFrame.from_dict(
                 {
-                    f"mode{i}": list(S_fcoupling[i, :])
+                    f"mode{i+1}": list(S_fcoupling[i, :])
                     for i in range(0, S_fcoupling.shape[0])
                 }
             ),
             "backward_sparam": pd.DataFrame.from_dict(
                 {
-                    f"mode{i}": list(S_bcoupling[i, :])
+                    f"mode{i+1}": list(S_bcoupling[i, :])
                     for i in range(0, S_bcoupling.shape[0])
                 }
             ),
             "overlap": pd.DataFrame.from_dict(
                 {
-                    f"mode{i}": list(overlap_coupling[i, :])
+                    f"mode{i+1}": list(overlap_coupling[i, :])
                     for i in range(0, overlap_coupling.shape[0])
                 }
             ),
@@ -726,25 +754,15 @@ class LumericalEmeSimulation:
     def plot_mode_coupling(
         self, input_mode: int, max_coupled_mode: int = None, group: int = 1
     ) -> None:
-        marker_list = [
-            "o",
-            "v",
-            "^",
-            "<",
-            ">",
-            "1",
-            "2",
-            "3",
-            "4",
-            "s",
-            "p",
-            "P",
-            "*",
-            "h",
-            "+",
-            "X",
-            "D",
-        ] * 10
+        """
+        Plot mode coupling coefficients from the input_mode to the max_coupled_mode.
+        Mode numbers start from 1 (fundamental mode).
+
+        Parameters:
+            input_mode: Mode of interest. Energy couples away from this mode to other modes.
+            max_coupled_mode: Maximum mode number to consider; all modes below this mode will be considered as well.
+            group: Group of cells to consider. First group is 0.
+        """
         coupling_coefficients = self.get_mode_coupling(
             input_mode, max_coupled_mode, group
         )
@@ -799,6 +817,73 @@ class LumericalEmeSimulation:
             str(self.dirpath / f"{self.component.name}_mode_coupling.png"),
             bbox_inches="tight",
         )
+
+    def get_neff_vs_position(self, group: int = 1) -> pd.DataFrame:
+        """
+        Get effective index vs position along device
+
+        Parameters:
+            group: Group of cells to consider. First group is 0.
+
+        Returns:
+            DataFrame with neff vs position for all considered modes
+            1. Effective index for different modes
+            2. Position (m)
+            | position | mode1 | mode2 | ...
+            | float    | float | float | ...
+        """
+
+        s = self.session
+        ss = self.simulation_settings
+
+        if s.layoutmode():
+            s.run()
+        s.emepropagate()
+
+        # Get starting point for number of cell and group span
+        cells = [int(val[0]) for val in s.getnamed("EME", "cells")]
+        num_cells = cells[group]
+        group_span = round(s.getnamed("EME", "group spans")[group][0], 15)
+        cell_start = 0
+        for i in range(0, group):
+            cell_start += cells[i]
+
+        ## Extract neff
+        neff = [[] for i in range(0, ss.num_modes)]
+        for i in range(cell_start + 1, num_cells + cell_start + 1):
+            data = s.getresult(f"EME::Cells::cell_{i}", "neff")
+            for j in range(0, data["neff"].shape[1]):
+                neff[j].append(data["neff"][0, j])
+
+        position = np.linspace(0, group_span, num_cells + 1)[1:]
+        result = {f"mode{i+1}": neff[i] for i in range(0, len(neff))}
+        result["position"] = list(position)
+
+        return pd.DataFrame.from_dict(result)
+
+    def plot_neff_vs_position(self, group: int = 1):
+        """
+        Get effective index vs position along device
+
+        Parameters:
+            group: Group of cells to consider. First group is 0.
+        """
+        data = self.get_neff_vs_position(group)
+
+        neff = data.filter(regex="mode")
+        plt.figure()
+        for i in range(0, len(neff.columns)):
+            plt.plot(
+                data["position"],
+                np.real(neff.loc[:, neff.columns[i]]),
+                label=neff.columns[i],
+                marker=marker_list[i],
+            )
+        plt.xlabel("Position (m)")
+        plt.ylabel("Effective Index")
+        plt.legend(loc="upper left", bbox_to_anchor=(1.04, 1))
+        plt.tight_layout()
+        plt.savefig(str(self.dirpath / f"{self.component.name}_neff_vs_position.png"))
 
 
 if __name__ == "__main__":
