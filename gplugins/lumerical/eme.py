@@ -92,9 +92,11 @@ def main():
         hide=False,
     )
 
+    data = sim.get_length_sweep()
+
     # sim.plot_mode_coupling(1, 10)
     # sim.plot_length_sweep()
-    sim.plot_neff_vs_position()
+    # sim.plot_neff_vs_position()
 
     print("done")
 
@@ -126,6 +128,9 @@ class LumericalEmeSimulation:
         simulation_settings: EME simulation settings
         convergence_settings: EME convergence settings
         dirpath: Directory where simulation files are saved
+        mesh_convergence_data: Mesh convergence results
+        cell_convergence_data: Cell convergence results
+        mode_convergence_data: Mode convergence results
 
     """
 
@@ -185,6 +190,7 @@ class LumericalEmeSimulation:
             session = lumapi.MODE(hide=hide)
         self.session = session
         s = session
+        s.newproject()
 
         ports = component.get_ports_list(port_type="optical")
         if not ports:
@@ -318,13 +324,19 @@ class LumericalEmeSimulation:
         s.save(str(dirpath / f"{component.name}.lms"))
 
         if run_mesh_convergence:
-            self.update_mesh_convergence(plot=not hide)
+            if not hide:
+                logger.info('Running mesh convergence.')
+            self.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
 
         if run_cell_convergence:
-            self.update_cell_convergence(plot=not hide)
+            if not hide:
+                logger.info('Running cell convergence.')
+            self.cell_convergence_data = self.update_cell_convergence(plot=not hide)
 
         if run_mode_convergence:
-            self.update_mode_convergence(plot=not hide)
+            if not hide:
+                logger.info('Running mode convergence.')
+            self.mode_convergence_data = self.update_mode_convergence(plot=not hide)
 
         if not hide:
             plt.show()
@@ -389,9 +401,12 @@ class LumericalEmeSimulation:
                 str(self.dirpath / f"{self.component.name}_mesh_convergence.png")
             )
 
-        return pd.DataFrame.from_dict(
-            {"num_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
-        )
+
+        convergence_data = pd.DataFrame.from_dict(
+            {"num_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)})
+        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_mesh_convergence.csv'))
+        return convergence_data
+
 
     def update_cell_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
@@ -456,9 +471,11 @@ class LumericalEmeSimulation:
                 str(self.dirpath / f"{self.component.name}_cell_convergence.png")
             )
 
-        return pd.DataFrame.from_dict(
+        convergence_data = pd.DataFrame.from_dict(
             {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
         )
+        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_cell_convergence.csv'))
+        return convergence_data
 
     def update_mode_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
@@ -524,16 +541,18 @@ class LumericalEmeSimulation:
                 str(self.dirpath / f"{self.component.name}_mode_convergence.png")
             )
 
-        return pd.DataFrame.from_dict(
+        convergence_data = pd.DataFrame.from_dict(
             {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
         )
+        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_mode_convergence.csv'))
+        return convergence_data
 
     def get_length_sweep(
         self,
         start_length: float = 1,
         stop_length: float = 100,
         num_pts: int = 100,
-        group: int = 2,
+        group: int = 1,
     ) -> pd.DataFrame:
         """
         Get length sweep sparams.
@@ -542,10 +561,12 @@ class LumericalEmeSimulation:
             start_length: Start length (um)
             stop_length: Stop length (um)
             num_pts: Number of points along sweep
-            group: Group span to sweep
+            group: Group span to sweep. First group starts from 0
 
         Returns:
             Dataframe with length sweep and complex sparams
+            | length (m) | s11     | s21     | s12     | s11     |
+            | float      | complex | complex | complex | complex |
         """
 
         s = self.session
@@ -554,7 +575,7 @@ class LumericalEmeSimulation:
 
         # set propagation sweep settings
         s.setemeanalysis("propagation sweep", 1)
-        s.setemeanalysis("parameter", f"group span {group}")
+        s.setemeanalysis("parameter", f"group span {group + 1}")
         s.setemeanalysis("start", start_length * um)
         s.setemeanalysis("stop", stop_length * um)
         s.setemeanalysis("number of points", num_pts)
@@ -568,24 +589,26 @@ class LumericalEmeSimulation:
         s22 = list(S["s22"])
         s11 = list(S["s11"])
         s12 = list(S["s12"])
-        group_span = list(S[f"group_span_{group}"])
+        group_span = list(S[f"group_span_{group + 1}"])
 
-        return pd.DataFrame.from_dict(
+        length_sweep = pd.DataFrame.from_dict(
             {
-                "length": group_span,
+                "length": [L[0] for L in group_span],
                 "s11": s11,
                 "s21": s21,
                 "s12": s12,
                 "s22": s22,
             }
         )
+        length_sweep.to_csv(str(self.dirpath / f'{self.component.name}_length_sweep.csv'))
+        return length_sweep
 
     def plot_length_sweep(
         self,
         start_length: float = 1,
         stop_length: float = 100,
         num_pts: int = 100,
-        group: int = 2,
+        group: int = 1,
     ) -> None:
         """
         Plot length sweep.
@@ -594,7 +617,7 @@ class LumericalEmeSimulation:
             start_length: Start length (um)
             stop_length: Stop length (um)
             num_pts: Number of points along sweep
-            group: Group span to sweep
+            group: Group span to sweep. First group starts from 0.
 
         Returns:
             Figure handle

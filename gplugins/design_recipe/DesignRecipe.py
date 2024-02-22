@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
+from gdsfactory.typings import ComponentFactory
 
 import gplugins.design_recipe as dr
+import json
 
 
 class DesignRecipe:
@@ -24,22 +25,27 @@ class DesignRecipe:
     # the hash of the system last time eval() was executed
     last_hash: int
 
-    # The component this DesignRecipe operates on. This is not necessarily
+    # The component factory this DesignRecipe operates on. This is not necessarily
     # the same `component` referred to in the `dependencies` recipes.
-    component: Component | None = None
+    cell: ComponentFactory | None = None
 
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
 
+    # Material map that maps materials from the layer_stack to the simulators' materials
+    material_map: dict[str, str]
+
     def __init__(
         self,
-        component: Component,
-        dependencies: list[dr.DesignRecipe],
+        cell: ComponentFactory,
+        material_map: dict[str, str] = None,
+        dependencies: list[dr.DesignRecipe] = [],
         layer_stack: LayerStack = get_layer_stack(),
     ):
         self.dependencies = dr.ConstituentRecipes(dependencies)
-        self.component = component
+        self.cell = cell
         self.last_hash = -1
+        self.material_map = material_map
         self.layer_stack = layer_stack
 
     def __hash__(self) -> int:
@@ -49,9 +55,9 @@ class DesignRecipe:
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
         """
         h = hashlib.sha1()
-        if self.component is not None:
-            h.update(self.component.hash_geometry(precision=1e-4).encode("utf-8"))
-        h.update(self.layer_stack.hash_geometry(precision=1e-4).encode("utf-8"))
+        if self.cell is not None:
+            h.update(self.cell().hash_geometry(precision=1e-4).encode("utf-8"))
+        h.update(self.layer_stack.model_dump_json().encode('utf-8'))
         return int.from_bytes(h.digest(), "big")
 
     def is_fresh(self) -> bool:
@@ -90,3 +96,29 @@ class DesignRecipe:
             if force_rerun_all or (not recipe.is_fresh):
                 success = success and recipe.eval(force_rerun_all)
         return success
+
+
+def eval_decorator(func):
+    """
+    Design recipe eval decorator
+
+    Parameters:
+        func: Design recipe eval method
+
+    Returns:
+        Design recipe eval method decorated with dependency execution and hashing
+    """
+    def design_recipe_eval(*args, **kwargs):
+        """
+        Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
+        """
+        # Evaluate the design recipe
+        func(*args, **kwargs)
+        # Evaluate independent recipes
+        self = args[0]
+        success = self.eval_dependencies()
+        # Update hash
+        self.last_hash = hash(self)
+        # Return successful execution
+        return success
+    return design_recipe_eval

@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class ConvergenceSettingsLumericalEme(BaseModel):
-    passes: int = 10
+    passes: int = 5
     sparam_diff: float = 0.01
 
     class Config:
