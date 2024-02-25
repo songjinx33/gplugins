@@ -97,7 +97,7 @@ def main():
     # sim.plot_mode_coupling(1, 10)
     # sim.plot_length_sweep()
     # sim.plot_neff_vs_position()
-
+    print(data)
     print("done")
 
 
@@ -147,6 +147,7 @@ class LumericalEmeSimulation:
         run_mesh_convergence: bool = False,
         run_cell_convergence: bool = False,
         run_mode_convergence: bool = False,
+        run_overall_convergence: bool = False,
         **settings,
     ):
         # Set up variables
@@ -323,19 +324,24 @@ class LumericalEmeSimulation:
 
         s.save(str(dirpath / f"{component.name}.lms"))
 
-        if run_mesh_convergence:
+        if run_overall_convergence:
             if not hide:
-                logger.info('Running mesh convergence.')
-            self.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
+                logger.info("Running overall convergence")
+            self.update_overall_convergence(plot=not hide)
+        else:
+            if run_mesh_convergence:
+                if not hide:
+                    logger.info("Running mesh convergence.")
+                self.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
 
-        if run_cell_convergence:
-            if not hide:
-                logger.info('Running cell convergence.')
-            self.cell_convergence_data = self.update_cell_convergence(plot=not hide)
+            if run_cell_convergence:
+                if not hide:
+                    logger.info("Running cell convergence.")
+                self.cell_convergence_data = self.update_cell_convergence(plot=not hide)
 
         if run_mode_convergence:
             if not hide:
-                logger.info('Running mode convergence.')
+                logger.info("Running mode convergence.")
             self.mode_convergence_data = self.update_mode_convergence(plot=not hide)
 
         if not hide:
@@ -379,10 +385,14 @@ class LumericalEmeSimulation:
                 # Calculate maximum diff in sparams
                 sparam_diff = max(
                     [
-                        max(np.diff(s21[-(cs.passes + 1) : -1])),
-                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                        max(abs(s21[-1] - np.array(s21[-(cs.passes + 1) : -1]))),
+                        max(abs(s11[-1] - np.array(s11[-(cs.passes + 1) : -1]))),
                     ]
                 )
+                if plot:
+                    logger.info(
+                        f"Mesh cells per wavelength: {ss.mesh_cells_per_wavelength} | S-Param Diff: {sparam_diff}"
+                    )
                 if sparam_diff < cs.sparam_diff:
                     converged = True
                 else:
@@ -401,12 +411,13 @@ class LumericalEmeSimulation:
                 str(self.dirpath / f"{self.component.name}_mesh_convergence.png")
             )
 
-
         convergence_data = pd.DataFrame.from_dict(
-            {"num_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)})
-        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_mesh_convergence.csv'))
+            {"mesh_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
+        )
+        convergence_data.to_csv(
+            str(self.dirpath / f"{self.component.name}_mesh_convergence.csv")
+        )
         return convergence_data
-
 
     def update_cell_convergence(self, plot: bool = False) -> pd.DataFrame:
         """
@@ -445,10 +456,14 @@ class LumericalEmeSimulation:
                 # Calculate maximum diff in sparams
                 sparam_diff = max(
                     [
-                        max(np.diff(s21[-(cs.passes + 1) : -1])),
-                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                        max(abs(s21[-1] - np.array(s21[-(cs.passes + 1) : -1]))),
+                        max(abs(s11[-1] - np.array(s11[-(cs.passes + 1) : -1]))),
                     ]
                 )
+                if plot:
+                    logger.info(
+                        f"Num cells: {ss.group_cells} | S-Param Diff: {sparam_diff}"
+                    )
                 if sparam_diff < cs.sparam_diff:
                     converged = True
                 else:
@@ -474,7 +489,9 @@ class LumericalEmeSimulation:
         convergence_data = pd.DataFrame.from_dict(
             {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
         )
-        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_cell_convergence.csv'))
+        convergence_data.to_csv(
+            str(self.dirpath / f"{self.component.name}_cell_convergence.csv")
+        )
         return convergence_data
 
     def update_mode_convergence(self, plot: bool = False) -> pd.DataFrame:
@@ -497,7 +514,7 @@ class LumericalEmeSimulation:
             s.switchtolayout()
             s.setnamed("EME", "number of modes for all cell groups", ss.num_modes)
             s.run()
-            s.emepropagate()
+            # s.emepropagate()
 
             s.setemeanalysis("Mode convergence sweep", 1)
             s.emesweep("mode convergence sweep")
@@ -512,13 +529,17 @@ class LumericalEmeSimulation:
 
             # Check whether convergence has been reached
             if len(s21) > cs.passes or len(s11) > cs.passes:
-                # Calculate maximum diff in sparams
+                # Calculate maximum diff in sparamsgd
                 sparam_diff = max(
                     [
-                        max(np.diff(s21[-(cs.passes + 1) : -1])),
-                        max(np.diff(s11[-(cs.passes + 1) : -1])),
+                        max(abs(s21[-1] - np.array(s21[-(cs.passes + 1) : -1]))),
+                        max(abs(s11[-1] - np.array(s11[-(cs.passes + 1) : -1]))),
                     ]
                 )
+                if plot:
+                    logger.info(
+                        f"Num modes: {ss.num_modes} | S-Param Diff: {sparam_diff}"
+                    )
                 if sparam_diff < cs.sparam_diff:
                     converged = True
                     break
@@ -544,7 +565,124 @@ class LumericalEmeSimulation:
         convergence_data = pd.DataFrame.from_dict(
             {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
         )
-        convergence_data.to_csv(str(self.dirpath / f'{self.component.name}_mode_convergence.csv'))
+        convergence_data.to_csv(
+            str(self.dirpath / f"{self.component.name}_mode_convergence.csv")
+        )
+        return convergence_data
+
+    def update_overall_convergence(self, plot: bool = False) -> pd.DataFrame:
+        """
+        Runs mesh and cell convergence simultaneously, switching strategies every time sparam variation increases.
+
+        Parameters:
+            plot: Plot and save convergence results
+
+        Returns:
+            Convergence data
+            | mesh_cells | num_cells | s21   | s11   |
+            | int        | int       | float | float |
+        """
+        s = self.session
+        cs = self.convergence_settings
+        ss = self.simulation_settings
+
+        s21 = []
+        s11 = []
+        mesh_cells_per_wavl = []
+        num_cells = []
+        sparam_diffs = []
+        converged = False
+        algo = True
+        while not converged:
+            s.switchtolayout()
+            s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
+            s.setnamed("EME", "cells", np.array(ss.group_cells))
+            # Get sparams and refine mesh
+            s.run()
+            s.emepropagate()
+            S = s.getresult("EME", "user s matrix")
+            s11.append(abs(S[0, 0]) ** 2)
+            s21.append(abs(S[1, 0]) ** 2)
+            mesh_cells_per_wavl.append(ss.mesh_cells_per_wavelength)
+            num_cells.append(ss.group_cells[1:-1])
+
+            # Check whether convergence has been reached
+            if len(s21) > cs.passes or len(s11) > cs.passes:
+                # Calculate maximum diff in sparams
+                sparam_diff = max(
+                    [
+                        max(abs(s21[-1] - np.array(s21[-(cs.passes + 1) : -1]))),
+                        max(abs(s11[-1] - np.array(s11[-(cs.passes + 1) : -1]))),
+                    ]
+                )
+                # If sparam diff is decreasing, continue to use existing convergence algorithm
+                # Else, switch algorithms
+                sparam_diffs.append(sparam_diff)
+                if len(sparam_diffs) > 1:
+                    if (sparam_diffs[-1] - sparam_diffs[-2]) > 0:
+                        algo = not algo
+
+                    if algo:
+                        ss.mesh_cells_per_wavelength += 1
+                    else:
+                        for i in range(1, len(ss.group_cells) - 1):
+                            ss.group_cells[i] += 1
+                else:
+                    ss.mesh_cells_per_wavelength += 1
+                    for i in range(1, len(ss.group_cells) - 1):
+                        ss.group_cells[i] += 1
+
+                # Print convergence step
+                if plot:
+                    logger.info(
+                        f"Mesh cells per wavelength: {ss.mesh_cells_per_wavelength} | Num cells: {ss.group_cells} | S-Param Diff: {sparam_diff}"
+                    )
+
+                # Check for convergence
+                if sparam_diff < cs.sparam_diff:
+                    converged = True
+                else:
+                    converged = False
+            else:
+                # Update mesh and number of cells
+                ss.mesh_cells_per_wavelength += 1
+                for i in range(1, len(ss.group_cells) - 1):
+                    ss.group_cells[i] += 1
+
+        if plot:
+            plt.figure()
+            plt.plot(mesh_cells_per_wavl, s21)
+            plt.plot(mesh_cells_per_wavl, s11)
+            plt.xticks(
+                mesh_cells_per_wavl,
+                [
+                    f"Mesh Cells: {mesh_cells_per_wavl[i]} | Num Cells: {num_cells[i]}"
+                    for i in range(0, len(mesh_cells_per_wavl))
+                ],
+            )
+            plt.setp(plt.xticks()[1], rotation=75, horizontalalignment="center")
+            plt.legend(["|S21|^2", "|S11|^2"])
+            plt.grid("on")
+            plt.xlabel("Mesh Cells Per Wavelength | Num Cells")
+            plt.ylabel("Magnitude")
+            plt.title(f"Overall Convergence | Wavelength={ss.wavelength}um")
+            plt.tight_layout()
+            plt.savefig(
+                str(self.dirpath / f"{self.component.name}_overall_convergence.png")
+            )
+
+        convergence_data = pd.DataFrame.from_dict(
+            {
+                "mesh_cells": mesh_cells_per_wavl,
+                "num_cells": num_cells,
+                "s21": list(s21),
+                "s11": list(s11),
+            }
+        )
+        convergence_data.to_csv(
+            str(self.dirpath / f"{self.component.name}_overall_convergence.csv")
+        )
         return convergence_data
 
     def get_length_sweep(
@@ -600,7 +738,9 @@ class LumericalEmeSimulation:
                 "s22": s22,
             }
         )
-        length_sweep.to_csv(str(self.dirpath / f'{self.component.name}_length_sweep.csv'))
+        length_sweep.to_csv(
+            str(self.dirpath / f"{self.component.name}_length_sweep.csv")
+        )
         return length_sweep
 
     def plot_length_sweep(

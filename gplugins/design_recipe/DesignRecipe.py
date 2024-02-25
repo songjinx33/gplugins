@@ -5,7 +5,6 @@ from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
 
 import gplugins.design_recipe as dr
-import json
 
 
 class DesignRecipe:
@@ -39,9 +38,10 @@ class DesignRecipe:
         self,
         cell: ComponentFactory,
         material_map: dict[str, str] = None,
-        dependencies: list[dr.DesignRecipe] = [],
+        dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
     ):
+        dependencies = dependencies or []
         self.dependencies = dr.ConstituentRecipes(dependencies)
         self.cell = cell
         self.last_hash = -1
@@ -57,7 +57,7 @@ class DesignRecipe:
         h = hashlib.sha1()
         if self.cell is not None:
             h.update(self.cell().hash_geometry(precision=1e-4).encode("utf-8"))
-        h.update(self.layer_stack.model_dump_json().encode('utf-8'))
+        h.update(self.layer_stack.model_dump_json().encode("utf-8"))
         return int.from_bytes(h.digest(), "big")
 
     def is_fresh(self) -> bool:
@@ -108,6 +108,7 @@ def eval_decorator(func):
     Returns:
         Design recipe eval method decorated with dependency execution and hashing
     """
+
     def design_recipe_eval(*args, **kwargs):
         """
         Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
@@ -121,4 +122,5 @@ def eval_decorator(func):
         self.last_hash = hash(self)
         # Return successful execution
         return success
+
     return design_recipe_eval
