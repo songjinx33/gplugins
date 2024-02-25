@@ -142,20 +142,26 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         sims = []
         length_sweeps = []
         for component in components:
-            sim = LumericalEmeSimulation(
-                component=component,
-                material_map=self.material_map,
-                layerstack=self.layer_stack,
-                simulation_settings=ss,
-                convergence_settings=cs,
-                hide=False,  # TODO: Make global variable for switching debug modes
-                run_overall_convergence=True,
-                run_mesh_convergence=False,
-                run_mode_convergence=True,
-                run_cell_convergence=False,
-                dirpath=self.dirpath,
-            )
-            sims.append(sim)
+            try:
+                sim = LumericalEmeSimulation(
+                    component=component,
+                    material_map=self.material_map,
+                    layerstack=self.layer_stack,
+                    simulation_settings=ss,
+                    convergence_settings=cs,
+                    hide=False,  # TODO: Make global variable for switching debug modes
+                    run_overall_convergence=True,
+                    run_mesh_convergence=False,
+                    run_mode_convergence=True,
+                    run_cell_convergence=False,
+                    dirpath=self.dirpath,
+                )
+                sims.append(sim)
+            except Exception as err:
+                logger.warning(
+                    f"{err}\n{component.name} failed to simulate. Moving onto next component"
+                )
+                continue
 
             # Get length of taper that has lower loss than routing loss
             length_sweep = sim.get_length_sweep(
@@ -180,7 +186,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             except StopIteration:
                 logger.warning(
                     f"{component.name} cannot achieve specified routing loss of "
-                    + f"-{di.narrow_waveguide_routing_loss_per_cm}dB/cm."
+                    + f"-{di.narrow_waveguide_routing_loss_per_cm}dB/cm. Use maximal length of {di.stop_length}um."
                 )
                 optimal_lengths.append(di.stop_length)
                 transmission_coefficients.append(s21[-1])
