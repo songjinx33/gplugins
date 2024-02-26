@@ -477,9 +477,6 @@ class LumericalFdtdSimulation:
     def update_port_convergence(self, port_modes: dict = {}, mesh_accuracy: int = 4, verbose: bool = False):
         ''' Update size of ports based on mode spec
 
-        Assumes that the ports are named 'port x' where x is an integer from 1 onward.
-        Ex. 'port 1', 'port 2', 'port 3', etc.
-
         Args:
             port_modes: Map between port name and target mode number. Ex. The following shows
                         how port 1 is targeting mode 2 and port 2 is targeting mode 1 (fundamental)
@@ -491,9 +488,6 @@ class LumericalFdtdSimulation:
                         }
             mesh_accuracy: Mesh accuracy used for port E-field calculations
             verbose: Print debug messages
-
-        Returns:
-            None
         '''
         s = self.session
         threshold = self.convergence_settings.port_field_intensity_threshold
@@ -778,6 +772,9 @@ class LumericalFdtdSimulation:
 
         # Restore original mesh accuracy
         s.set('mesh accuracy', orig_mesh_accuracy)
+
+    def update_mesh_convergence(self) -> pd.DataFrame:
+        pass
 
 
 if __name__ == "__main__":
