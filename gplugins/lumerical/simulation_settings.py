@@ -226,7 +226,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         field_profile_samples: number of wavelengths to compute field profile.
     """
 
-    port_margin: float = 1.5
+    port_margin: float = 0.2
     port_extension: float = 5.0
     mesh_accuracy: int = 1
     wavelength_start: float = 1.5

@@ -1,4 +1,4 @@
-"""Write Sparameters with Lumerical FDTD."""
+"""Write Sparameters with Lumerical FDTD"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pathlib import Path
@@ -85,7 +85,8 @@ def main():
 
     sim = LumericalFdtdSimulation(component=taper,
                                   material_map=layer_map,
-                                  hide=False
+                                  hide=False,
+                                  run_port_convergence=True,
                                   )
     sp = sim.write_sparameters()
     print('Done')
@@ -118,6 +119,7 @@ class LumericalFdtdSimulation:
                  dirpath: PathType | None = "",
                  hide: bool = True,
                  run_mesh_convergence: bool = False,
+                 run_port_convergence: bool = False,
                  xmargin: float = 0,
                  ymargin: float = 0,
                  xmargin_left: float = 0,
@@ -397,6 +399,13 @@ class LumericalFdtdSimulation:
         s.setsweep("s-parameter sweep", "Excite all ports", 1)
         s.setsweep("S sweep", "auto symmetry", True)
 
+        # Run convergence if specified
+        if run_port_convergence:
+            self.update_port_convergence(verbose=not hide)
+
+        if run_mesh_convergence:
+            pass
+
         # Save simulation and settings
         self.filepath = get_sparameters_path(
             component=component,
@@ -464,6 +473,311 @@ class LumericalFdtdSimulation:
                 )
 
             return sp
+
+    def update_port_convergence(self, port_modes: dict = {}, mesh_accuracy: int = 4, verbose: bool = False):
+        ''' Update size of ports based on mode spec
+
+        Assumes that the ports are named 'port x' where x is an integer from 1 onward.
+        Ex. 'port 1', 'port 2', 'port 3', etc.
+
+        Args:
+            port_modes: Map between port name and target mode number. Ex. The following shows
+                        how port 1 is targeting mode 2 and port 2 is targeting mode 1 (fundamental)
+                        {
+                            'port 1': 2,
+                            'port 2': 1,
+                            .
+                            .
+                        }
+            mesh_accuracy: Mesh accuracy used for port E-field calculations
+            verbose: Print debug messages
+
+        Returns:
+            None
+        '''
+        s = self.session
+        threshold = self.convergence_settings.port_field_intensity_threshold
+
+        # Get number of ports
+        s.groupscope('::model::FDTD::ports')
+        s.selectall()
+        num_ports = int(s.getnumber())
+        s.groupscope('::model')
+
+        # Ensure mesh accuracy is medium-high to get accurate port E-field calcualtions
+        orig_mesh_accuracy = s.getnamed('FDTD', 'mesh accuracy')
+        s.setnamed('FDTD', 'mesh accuracy', mesh_accuracy)
+
+        # Iterate through ports
+        for port in self.component.get_ports():
+            # Set port size 5x existing size to calculate E field intensity properly and ensure FDTD region encapsulates port
+            # NOTE: Port edges have a boundary condition that ensures the field decays to near zero. So, even if port is
+            # sized just larger than waveguide, E field does not decay properly
+            s.select(f'FDTD::ports::{port.name}')
+            s.set('x span', s.get('x span') * 5)
+            s.set('y span', s.get('y span') * 5)
+            s.set('z span', s.get('z span') * 5)
+
+            port_xmin = s.get('x min')
+            port_xmax = s.get('x max')
+            port_ymin = s.get('y min')
+            port_ymax = s.get('y max')
+            port_zmin = s.get('z min')
+            port_zmax = s.get('z max')
+
+            s.select('FDTD')
+            fdtd_zmin = s.get('z min')
+            fdtd_zmax = s.get('z max')
+            fdtd_xmin = s.get('x min')
+            fdtd_xmax = s.get('x max')
+            fdtd_ymin = s.get('y min')
+            fdtd_ymax = s.get('y max')
+
+            if port_xmin < fdtd_xmin:
+                s.set('x min', port_xmin)
+            if port_xmax > fdtd_xmax:
+                s.set('x max', port_xmax)
+            if port_ymin < fdtd_ymin:
+                s.set('y min', port_ymin)
+            if port_ymax > fdtd_ymax:
+                s.set('y max', port_ymax)
+            if port_zmin < fdtd_zmin:
+                s.set('z min', port_zmin)
+            if port_zmax > fdtd_zmax:
+                s.set('z max', port_zmax)
+
+            converged = False
+            while not converged:
+                # Get FDTD region z min, z max, x min, x max, y min, y max
+                # Updating port sizes may affect FDTD region size
+                s.select('FDTD')
+                fdtd_zmin = s.get('z min')
+                fdtd_zmax = s.get('z max')
+                fdtd_xmin = s.get('x min')
+                fdtd_xmax = s.get('x max')
+                fdtd_ymin = s.get('y min')
+                fdtd_ymax = s.get('y max')
+
+                # Get target mode number and set mode number in port
+                port_mode = port_modes.get(port.name, 1)  # default is fundamental mode
+                s.select(f'FDTD::ports::{port.name}')
+                s.set('mode selection', 'user select')
+                s.set('selected mode numbers', port_mode)
+                s.updateportmodes(port_mode)
+
+                # Get E field intensity
+                s.eval(f'select("FDTD::ports::{port.name}");' +
+                          f'mode_profiles=getresult("FDTD::ports::{port.name}","mode profiles");' +
+                          f'E=mode_profiles.E{port_mode}; x=mode_profiles.x; y=mode_profiles.y; z=mode_profiles.z;' +
+                          f'?"Selected pin: {port.name}";')
+                E = s.getv("E")
+                x = s.getv("x")
+                y = s.getv("y")
+                z = s.getv("z")
+
+                # Check if at least two dimensions are not singular
+                dim = 0
+                if not type(x) == float:
+                    dim += 1
+                if not type(y) == float:
+                    dim += 1
+                if not type(z) == float:
+                    dim += 1
+                if dim < 2:
+                    raise TypeError(
+                        f'Port {port.name} mode profile is missing a dimension (only single dimension). Check port orientation.')
+
+                # To get E field intensity, need to find port orientation
+                # The E field intensity data depends on injection axis
+                s.select(f'FDTD::ports::{port.name}')
+                inj_axis = s.get('injection axis')
+                if inj_axis == 'x-axis':
+                    Efield_xyz = np.array(E[0, :, :, 0, :])
+                elif inj_axis == 'y-axis':
+                    Efield_xyz = np.array(E[:, 0, :, 0, :])
+
+                Efield_intensity = np.empty([Efield_xyz.shape[0], Efield_xyz.shape[1]])
+                for a in range(0, Efield_xyz.shape[0]):
+                    for b in range(0, Efield_xyz.shape[1]):
+                        Efield_intensity[a, b] = abs(Efield_xyz[a, b, 0]) ** 2 + \
+                                                 abs(Efield_xyz[a, b, 1]) ** 2 + \
+                                                 abs(Efield_xyz[a, b, 2]) ** 2
+
+                # Get max E field intensity along x/y axis
+                Efield_intensity_xy = np.empty([Efield_xyz.shape[0]])
+                for a in range(0, Efield_xyz.shape[0]):
+                    Efield_intensity_xy[a] = max(Efield_intensity[a, :])
+
+                # Get max E field intensity along z axis
+                Efield_intensity_z = np.empty([Efield_xyz.shape[1]])
+                for b in range(0, Efield_xyz.shape[1]):
+                    Efield_intensity_z[b] = max(Efield_intensity[:, b])
+
+                # Get initial z min and z max for expansion reference
+                # Get initial z span;  this will be used to expand ports
+                s.select(f'FDTD::ports::{port.name}')
+                port_z_min = s.get('z min')
+                port_z_max = s.get('z max')
+                port_z_span = s.get('z span')
+
+                # If all E field intensities > threshold, expand z span of port by initial z span
+                # Else, set z min and z max to locations where E field intensities decay below threshold
+                indexes = np.argwhere(Efield_intensity_z > threshold)
+                if len(indexes) == 0:
+                    min_index = 0
+                    max_index = len(Efield_intensity_z) - 1
+                else:
+                    min_index, max_index = int(min(indexes)), int(max(indexes))
+
+                if min_index == 0:
+                    s.set('z min', port_z_min - port_z_span / 2)
+                    converged_zmin = False
+                else:
+                    s.set('z min', z[min_index - 1])
+                    converged_zmin = True
+
+                if max_index == (len(Efield_intensity_z) - 1):
+                    s.set('z max', port_z_max + port_z_span / 2)
+                    converged_zmax = False
+                else:
+                    s.set('z max', z[max_index + 1])
+                    converged_zmax = True
+
+                if verbose:
+                    logger.info(f'port {port.name}, mode {port_mode} field decays at: {z[max_index]}, {z[min_index]} microns')
+
+                # Get initial x/y min and x/y max for expansion reference
+                # Get initial x/y span;  this will be used to expand ports
+                s.select(f'FDTD::ports::{port.name}')
+                if inj_axis == 'x-axis':
+                    port_xy_min = s.get('y min')
+                    port_xy_max = s.get('y max')
+                    port_xy_span = s.get('y span')
+
+                    # If all E field intensities > threshold, expand x/y span of port by initial x/y span
+                    # Else, set x/y min and x/y max to locations where E field intensities decay below threshold
+                    indexes = np.argwhere(Efield_intensity_xy > threshold)
+                    if len(indexes) == 0:
+                        min_index = 0
+                        max_index = len(Efield_intensity_xy) - 1
+                    else:
+                        min_index, max_index = int(min(indexes)), int(max(indexes))
+
+                    if min_index == 0:
+                        s.set('y min', port_xy_min - port_xy_span / 2)
+                        converged_ymin = False
+                    else:
+                        s.set('y min', y[min_index - 1])
+                        converged_ymin = True
+
+                    if max_index == (len(Efield_intensity_xy) - 1):
+                        s.set('y max', port_xy_max + port_xy_span / 2)
+                        converged_ymax = False
+                    else:
+                        s.set('y max', y[max_index + 1])
+                        converged_ymax = True
+
+                    if verbose:
+                        logger.info(f'port {port.name}, mode {port_mode} field decays at: {y[max_index]}, {y[min_index]} microns')
+
+                    converged = converged_ymax & converged_ymin & converged_zmax & converged_zmin
+
+                elif inj_axis == 'y-axis':
+                    port_xy_min = s.get('x min')
+                    port_xy_max = s.get('x max')
+                    port_xy_span = s.get('x span')
+
+                    # If all E field intensities > threshold, expand x/y span of port by initial x/y span
+                    # Else, set x/y min and x/y max to locations where E field intensities decay below threshold
+                    indexes = np.argwhere(Efield_intensity_xy > threshold)
+                    if len(indexes) == 0:
+                        min_index = 0
+                        max_index = len(Efield_intensity_xy) - 1
+                    else:
+                        min_index, max_index = int(min(indexes)), int(max(indexes))
+
+                    if min_index == 0:
+                        s.set('x min', port_xy_min - port_xy_span / 2)
+                        converged_xmin = False
+                    else:
+                        s.set('x min', x[min_index - 1])
+                        converged_xmin = True
+
+                    if max_index == (len(Efield_intensity_xy) - 1):
+                        s.set('x max', port_xy_max + port_xy_span / 2)
+                        converged_xmax = False
+                    else:
+                        s.set('x max', x[max_index + 1])
+                        converged_xmax = True
+
+                    if verbose:
+                        logger.info(f'port {port.name}, mode {port_mode} field decays at: {x[max_index]}, {x[min_index]} microns')
+
+                    converged = converged_xmax & converged_xmin & converged_zmax & converged_zmin
+
+                # If port z min < FDTD z min or port z max > FDTD z max,
+                # update FDTD z min or max to encapsulate ports
+                # If port x/y min < FDTD x/y min or port x/y max > FDTD x/y max,
+                # update FDTD x/y min or max to encapsulate ports
+                s.select(f'FDTD::ports::{port.name}')
+                port_z_min = s.get('z min')
+                port_z_max = s.get('z max')
+                port_x_min = s.get('x min')
+                port_x_max = s.get('x max')
+                port_y_min = s.get('y min')
+                port_y_max = s.get('y max')
+                s.select(f'FDTD')
+                if port_z_min < fdtd_zmin:
+                    s.set('z min', port_z_min)
+                if port_x_min < fdtd_xmin:
+                    s.set('x min', port_x_min)
+                if port_y_min < fdtd_ymin:
+                    s.set('y min', port_y_min)
+                if port_z_max > fdtd_zmax:
+                    s.set('z max', port_z_max)
+                if port_x_max > fdtd_xmax:
+                    s.set('x max', port_x_max)
+                if port_y_max > fdtd_ymax:
+                    s.set('y max', port_y_max)
+
+        # Iterate through ports and set FDTD extents to maximum extents of ports
+        s.select('FDTD')
+        xmin = s.get('x max')
+        xmax = s.get('x min')
+        ymin = s.get('y max')
+        ymax = s.get('y min')
+        zmin = s.get('z max')
+        zmax = s.get('z min')
+        for port in self.component.get_ports():
+            s.select(f'FDTD::ports::{port.name}')
+            port_ymin = s.get('y min')
+            port_ymax = s.get('y max')
+            port_xmin = s.get('x min')
+            port_xmax = s.get('x max')
+            port_zmin = s.get('z min')
+            port_zmax = s.get('z max')
+            if port_xmin < xmin:
+                xmin = port_xmin
+            if port_ymin < ymin:
+                ymin = port_ymin
+            if port_zmin < zmin:
+                zmin = port_zmin
+            if port_xmax > xmax:
+                xmax = port_xmax
+            if port_ymax > ymax:
+                ymax = port_ymax
+            if port_zmax > zmax:
+                zmax = port_zmax
+        s.select('FDTD')
+        s.set('x min', xmin - self.simulation_settings.port_margin * um)
+        s.set('y min', ymin - self.simulation_settings.port_margin * um)
+        s.set('z min', zmin - self.simulation_settings.port_margin * um)
+        s.set('x max', xmax + self.simulation_settings.port_margin * um)
+        s.set('y max', ymax + self.simulation_settings.port_margin * um)
+        s.set('z max', zmax + self.simulation_settings.port_margin * um)
+
+        # Restore original mesh accuracy
+        s.set('mesh accuracy', orig_mesh_accuracy)
 
 
 if __name__ == "__main__":
