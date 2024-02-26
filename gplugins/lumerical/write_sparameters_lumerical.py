@@ -9,15 +9,15 @@ import gdsfactory as gf
 import numpy as np
 import yaml
 from gdsfactory.config import __version__, logger
-from gplugins.lumerical.simulation_settings import (
-    SIMULATION_SETTINGS_LUMERICAL_FDTD,
-    SimulationSettingsLumericalFdtd,
-)
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 
 from gplugins.common.utils.get_sparameters_path import (
     get_sparameters_path_lumerical as get_sparameters_path,
+)
+from gplugins.lumerical.simulation_settings import (
+    SIMULATION_SETTINGS_LUMERICAL_FDTD,
+    SimulationSettingsLumericalFdtd,
 )
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
 

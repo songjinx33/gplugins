@@ -19,4 +19,5 @@ class ConvergenceSettingsLumericalFdtd(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+
 LUMERICAL_FDTD_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalFdtd()
