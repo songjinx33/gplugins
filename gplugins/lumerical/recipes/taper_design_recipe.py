@@ -133,8 +133,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 length=10,  # um
                 width_type=wtype,
             )
-            for wtype in ["parabolic"]
-        ]  # TODO: Change from ADHOC typing.get_args(WidthTypes)
+            for wtype in [typing.get_args(WidthTypes)]
+        ]
 
         optimal_lengths = []
         transmission_coefficients = []
