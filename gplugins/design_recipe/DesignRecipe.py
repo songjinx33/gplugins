@@ -3,6 +3,8 @@ from __future__ import annotations
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
+from gdsfactory import Component
+from typing import Callable
 
 import gplugins.design_recipe as dr
 
@@ -26,7 +28,7 @@ class DesignRecipe:
 
     # The component factory this DesignRecipe operates on. This is not necessarily
     # the same `component` referred to in the `dependencies` recipes.
-    cell: ComponentFactory | None = None
+    cell: ComponentFactory | Component | None = None
 
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
@@ -36,7 +38,7 @@ class DesignRecipe:
 
     def __init__(
         self,
-        cell: ComponentFactory,
+        cell: ComponentFactory | Component,
         material_map: dict[str, str] = None,
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
@@ -56,7 +58,10 @@ class DesignRecipe:
         """
         h = hashlib.sha1()
         if self.cell is not None:
-            h.update(self.cell().hash_geometry(precision=1e-4).encode("utf-8"))
+            if isinstance(self.cell, Callable):
+                h.update(self.cell().hash_geometry(precision=1e-4).encode("utf-8"))
+            elif type(self.cell) == Component:
+                h.update(self.cell.hash_geometry(precision=1e-4).encode("utf-8"))
         h.update(self.layer_stack.model_dump_json().encode("utf-8"))
         return int.from_bytes(h.digest(), "big")
 
