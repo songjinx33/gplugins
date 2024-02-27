@@ -53,6 +53,25 @@ To compute the Sparameters you need to pass run=True
 """
 
 um = 1e-6
+marker_list = [
+    "o",
+    "v",
+    "^",
+    "<",
+    ">",
+    "1",
+    "2",
+    "3",
+    "4",
+    "s",
+    "p",
+    "P",
+    "*",
+    "h",
+    "+",
+    "X",
+    "D",
+] * 10
 
 
 def main():
@@ -92,9 +111,9 @@ def main():
         material_map=layer_map,
         hide=False,
         run_port_convergence=False,
-        run_mesh_convergence=True,
+        run_mesh_convergence=False,
     )
-    sp = sim.write_sparameters()
+    sp = sim.write_sparameters(overwrite=True)
     print(sp)
     print("Done")
 
@@ -438,60 +457,98 @@ class LumericalFdtdSimulation:
             )
 
     def write_sparameters(
-        self, run: bool = True, overwrite: bool = False, delete_fsp_files: bool = True
+        self,
+        overwrite: bool = False,
+        delete_fsp_files: bool = False,
+        plot: bool = False,
     ) -> pd.DataFrame:
+        """
+        Run s-parameter simulation; write s-parameters to npz, csv, dat files; or read s-parameters from csv.
+
+        If s-parameter data saved in csv file as pandas.DataFrame, retrieve the data and return.
+        Else, run s-parameter simulation, extract s-parameters, and save the following:
+        - YAML simulation setup (.yml)
+        - s-parameters (.npz, .csv, .dat)
+        - Plot of s-parameters, optional (.png)
+
+        Parameters:
+            overwrite: If True, overwrites s-parameter files
+            delete_fsp_files: If True, deletes s-parameter simulation files
+            plot: If True, plot s-parameters and save plot (.png)
+
+        Returns:
+            S-parameters vs wavelength
+            | wavelength | S11     | S12     | ...
+            | float      | complex | complex | ...
+            | um         |         |         | ...
+        """
         s = self.session
 
         filepath = self.filepath_npz.with_suffix(".dat")
         filepath_sim_settings = filepath.with_suffix(".yml")
+        filepath_csv = self.filepath_npz.with_suffix(".csv")
         fspdir = filepath.parent / f"{filepath.stem}_s-parametersweep"
-        filepath_fsp = filepath.with_suffix(".fsp")
 
-        if run and self.filepath_npz.exists() and not overwrite:
-            logger.info(f"Reading Sparameters from {self.filepath_npz.absolute()!r}")
-            return np.load(self.filepath_npz)
+        if filepath_csv.exists() and not overwrite:
+            logger.info(f"Reading Sparameters from {filepath_csv!r}")
+            sparam_data = pd.read_csv(filepath_csv, index_col=0)
 
-        if not run and self.session is None:
-            print(run_false_warning)
-
-        logger.info(f"Writing Sparameters to {self.filepath_npz.absolute()!r}")
+            return sparam_data
 
         start = time.time()
-        if run:
-            s.save(str(filepath_fsp))
-            s.runsweep("s-parameter sweep")
-            sp = s.getsweepresult("s-parameter sweep", "S parameters")
-            s.exportsweep("s-parameter sweep", str(filepath))
-            logger.info(f"wrote sparameters to {str(filepath)!r}")
+        s.save()
+        # Add base sparam sweep
+        s.deletesweep("s-parameter sweep")
+        s.addsweep(3)
+        s.setsweep("s-parameter sweep", "Excite all ports", 1)
+        s.setsweep("S sweep", "auto symmetry", True)
+        s.runsweep()
+        sp = s.getsweepresult("s-parameter sweep", "S parameters")
+        s.exportsweep("s-parameter sweep", str(filepath))
+        logger.info(f"Writing Sparameters to {str(filepath)!r}")
 
-            sp["wavelengths"] = sp.pop("lambda").flatten() / um
-            np.savez_compressed(filepath, **sp)
+        sp["wavelengths"] = sp.pop("lambda").flatten() / um
+        np.savez_compressed(self.filepath_npz, **sp)
+        logger.info(f"Writing Sparameters to {self.filepath_npz.absolute()!r}")
 
-            # keys = [key for key in sp.keys() if key.startswith("S")]
-            # ra = {
-            #     f"{key.lower()}a": list(np.unwrap(np.angle(sp[key].flatten())))
-            #     for key in keys
-            # }
-            # rm = {f"{key.lower()}m": list(np.abs(sp[key].flatten())) for key in keys}
-            # results = {"wavelengths": wavelengths}
-            # results.update(ra)
-            # results.update(rm)
-            # df = pd.DataFrame(results, index=wavelengths)
-            # df.to_csv(filepath_npz, index=False)
+        end = time.time()
+        sim_settings = self.simulation_settings.model_dump()
+        sim_settings.update(compute_time_seconds=end - start)
+        sim_settings.update(compute_time_minutes=(end - start) / 60)
+        filepath_sim_settings.write_text(yaml.dump(sim_settings))
+        if delete_fsp_files and fspdir.exists():
+            shutil.rmtree(fspdir)
+            logger.info(
+                f"deleting simulation files in {str(fspdir)!r}. "
+                "To keep them, use delete_fsp_files=False flag"
+            )
 
-            end = time.time()
-            sim_settings = self.simulation_settings.model_dump()
-            sim_settings.update(compute_time_seconds=end - start)
-            sim_settings.update(compute_time_minutes=(end - start) / 60)
-            filepath_sim_settings.write_text(yaml.dump(sim_settings))
-            if delete_fsp_files and fspdir.exists():
-                shutil.rmtree(fspdir)
-                logger.info(
-                    f"deleting simulation files in {str(fspdir)!r}. "
-                    "To keep them, use delete_fsp_files=False flag"
-                )
+        sparams = {k: sp[k] for k in sp["Lumerical_dataset"]["attributes"]}
+        sparams["wavelength"] = list(sp["wavelengths"])
+        sparam_data = pd.DataFrame(sparams)
+        sparam_data.to_csv(filepath_csv)
+        logger.info(f"Writing Sparameters to {filepath_csv!r}")
 
-            return sp
+        if plot:
+            plt.figure()
+            columns = list(sparam_data.columns)
+            for i in range(0, len(columns)):
+                if not columns[i] == "wavelength":
+                    plt.plot(
+                        sparam_data.loc[:, "wavelength"],
+                        abs(sparam_data.loc[:, columns[i]]) ** 2,
+                        label=f"|{columns[i]}|^2",
+                        marker=marker_list[i],
+                    )
+            plt.xlabel("Wavelength (um)")
+            plt.ylabel("Magnitude")
+            plt.title("S-Parameters")
+            plt.grid("on")
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(str(self.dirpath / f"{self.component.name}_s-parameters.png"))
+
+        return sparam_data
 
     def update_port_convergence(
         self,
@@ -818,6 +875,7 @@ class LumericalFdtdSimulation:
 
         # Restore original mesh accuracy
         s.set("mesh accuracy", orig_mesh_accuracy)
+        s.save()
 
     def update_mesh_convergence(
         self,
