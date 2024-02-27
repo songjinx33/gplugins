@@ -23,32 +23,37 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalEme,
 )
 
-# Steps:
-# 1. EME Geometry + Length Sweep. Extract coupling of modes as well.
-# 2. Get length that achieves design goals
 um = 1e-6
 cm = 1e-2
 
 
-def main():
-    pass
-    # layer_map = {
-    #     "si": "Si (Silicon) - Palik",
-    #     "sio2": "SiO2 (Glass) - Palik",
-    #     "sin": "Si3N4 (Silicon Nitride) - Phillip",
-    #     "TiN": "TiN - Palik",
-    #     "Aluminum": "Al (Aluminium) Palik",
-    # }
-    # LUMERICAL_EME_CONVERGENCE_SETTINGS.sparam_diff = 1-10**(-0.0025/10)
-    # taper_recipe = RoutingTaperDesignRecipe(material_map=layer_map, simulation_setup=LUMERICAL_EME_SIMULATION_SETTINGS,
-    #                                         convergence_setup=LUMERICAL_EME_CONVERGENCE_SETTINGS)
-    # success = taper_recipe.eval()
-    # logger.info('Done')
-
-
 class RoutingTaperDesignIntent(BaseModel):
+    r"""
+    Design intent for routing taper design recipe
+
+    Attributes:
+        narrow_waveguide_routing_loss_per_cm: Narrow waveguide routing loss (dB/cm)
+        narrow_waveguide_cross_section: Narrow waveguide cross section
+        wide_waveguide_cross_section: Wide waveguide cross section
+        start_length: Starting length in length sweep (um)
+        stop_length: Ending length in length sweep (um)
+        num_pts: Number of points to consider in length sweep
+
+                         |       |
+                         |      /|---------
+                         |    /  |
+                         |  /    |
+        -----------------|/      |
+        narrow waveguide | taper | wide waveguide
+        -----------------|\      |
+                         |  \    |
+                         |    \  |
+                         |      \|---------
+                         |       |
+
+    """
+
     narrow_waveguide_routing_loss_per_cm: float = 3  # dB / cm
-    wide_waveguide_routing_loss_per_cm: float = 0.5  # dB / cm
     narrow_waveguide_cross_section: CrossSectionSpec = partial(
         gf.cross_section.cross_section,
         layer=(1, 0),
@@ -70,6 +75,10 @@ class RoutingTaperDesignIntent(BaseModel):
 
 
 class RoutingTaperDesignRecipe(DesignRecipe):
+    """
+    Routing taper design recipe.
+    """
+
     # Design intent
     design_intent: RoutingTaperDesignIntent | None = None
 
@@ -82,8 +91,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
     )
 
     # Results
-    component: Component | None = None
-    length_sweep: pd.DataFrame | None = None
+    component: Component | None = None  # Optimal taper component
+    length_sweep: pd.DataFrame | None = None  # Length sweep results
 
     def __init__(
         self,
@@ -110,8 +119,27 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         simulation_setup: SimulationSettingsLumericalEme | None = None,
         convergence_setup: ConvergenceSettingsLumericalEme | None = None,
     ):
-        """
-        Run taper design recipe
+        r"""
+        Run taper design recipe.
+
+                         |       |
+                         |      /|---------
+                         |    /  |
+                         |  /    |
+        -----------------|/      |
+        narrow waveguide | taper | wide waveguide
+        -----------------|\      |
+                         |  \    |
+                         |    \  |
+                         |      \|---------
+                         |       |
+
+        1. Sweep taper geometry in EME and get best geometry and length for component.
+                Best component is derived from the following (in order):
+                a) The dB/cm loss for the narrow waveguide routing must match the derived dB/cm loss for the taper
+                b) The component must have the lowest reflections
+                c) The component must be the shortest
+        2. Run FDTD simulation to extract s-params for best component
 
         Parameters
             simulation_setup: Simulation settings

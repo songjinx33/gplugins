@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
-from gdsfactory import Component
-from typing import Callable
 
 import gplugins.design_recipe as dr
 
