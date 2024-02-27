@@ -106,6 +106,7 @@ def main():
         "Aluminum": "Al (Aluminium) Palik",
     }
     from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+
     layerstack_lumerical2021 = LayerStack(
         layers={
             "clad": LayerLevel(
@@ -184,50 +185,20 @@ def main():
         }
     )
 
-    efield_intensity_thresholds = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
-    SIMULATION_SETTINGS_LUMERICAL_FDTD.mesh_accuracy = 6
-    SIMULATION_SETTINGS_LUMERICAL_FDTD.wavelength_points = 1
-    session = None
-    sparams = {'threshold': efield_intensity_thresholds}
-    for thres in efield_intensity_thresholds:
-        LUMERICAL_FDTD_CONVERGENCE_SETTINGS.port_field_intensity_threshold = thres
-        sim = LumericalFdtdSimulation(
-            component=taper,
-            material_map=layer_map,
-            layerstack=layerstack_lumerical2021,
-            session=session,
-            convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-            simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-            hide=False,
-            run_port_convergence=True,
-            run_mesh_convergence=False,
-        )
-        session = sim.session
-        sp = sim.write_sparameters(overwrite=True)
-        sp_data = sp.to_dict(orient='list')
-        for k, v in sp_data.items():
-            if not k == 'wavelength':
-                if not k in sparams:
-                    sparams[k] = v
-                    sparams[k][0] = abs(sparams[k][0]) ** 2
-                else:
-                    sparams[k].append(abs(v[0]) ** 2)
-        print(sp)
+    sim = LumericalFdtdSimulation(
+        component=taper,
+        material_map=layer_map,
+        layerstack=layerstack_lumerical2021,
+        convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+        simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+        hide=False,
+        dirpath="/root/PycharmProjects/gdsfactory_sean/gplugins/gplugins/lumerical/tests",
+        run_port_convergence=True,
+        run_mesh_convergence=False,
+    )
 
-    df = pd.DataFrame(sparams)
-    df.to_csv(str(Path(__file__).resolve().parent / f'{taper.name}_efield_intensity_convergence.csv'))
-    for k, v in sparams.items():
-        if not k == 'threshold':
-            plt.figure()
-            plt.plot(sparams['threshold'], sparams[k])
-            plt.xscale('log')
-            plt.xlabel('E-Field Intensity Threshold')
-            plt.ylabel('Magnitude')
-            plt.title(f'|{k}|^2')
-            plt.grid('on')
-            plt.tight_layout()
-            plt.savefig(str(Path(__file__).resolve().parent / f'{taper.name}_efield_intensity_convergence_{k}.png'))
-
+    sp = sim.write_sparameters(overwrite=True)
+    print(sp)
     print("Done")
 
 
@@ -359,7 +330,10 @@ class LumericalFdtdSimulation:
                  |_______|_______________________|
 
         """
+        if isinstance(dirpath, str):
+            dirpath = Path(dirpath)
         self.dirpath = dirpath = dirpath or Path(__file__).resolve().parent
+
         self.convergence_settings = convergence_settings = (
             convergence_settings or LUMERICAL_FDTD_CONVERGENCE_SETTINGS
         )
@@ -562,6 +536,9 @@ class LumericalFdtdSimulation:
 
         # Run convergence if specified
         if run_port_convergence:
+            self.field_intensity_convergence_data = (
+                self.update_field_intensity_threshold(plot=not hide)
+            )
             self.update_port_convergence(verbose=not hide)
 
         if run_mesh_convergence:
@@ -1034,6 +1011,7 @@ class LumericalFdtdSimulation:
 
         # Set base simulation settings
         s.select("FDTD::ports")
+        orig_wavl_points = s.get("monitor frequency points")
         s.set("monitor frequency points", wavl_points)
 
         # Set resources
@@ -1147,9 +1125,122 @@ class LumericalFdtdSimulation:
                     f"Mesh convergence failed. Setting mesh accuracy to {max_mesh_accuracy}."
                 )
 
+        # Restore original sim settings
+        s.select("FDTD::ports")
+        s.set("monitor frequency points", orig_wavl_points)
+
         convergence_data = pd.DataFrame(sparams)
         convergence_data.to_csv(str(p / f"{self.component.name}_mesh_convergence.csv"))
         return convergence_data
+
+    def update_field_intensity_threshold(
+        self,
+        port_modes: dict | None = None,
+        mesh_accuracy: int = 6,
+        wavl_points: int = 1,
+        plot: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Update port field intensity threshold based on sweep of field intensity and sparam convergence.
+
+        Saves convergence data as pd.DataFrame in csv. Optionally, plots and saves png.
+
+        Parameters:
+            port_modes: Map of port name to target mode in port
+            mesh_accuracy: Mesh accuracy to perform get mode profiles. Ensure this is high for accurate mode profiles.
+            wavl_points: Number of wavelength points to consider for sparam convergence
+            plot: Plot sparam convergence results and save png
+
+        Returns:
+            Convergence data in pd.DataFrame. S-params are absolute value squared (i.e. |S11|^2)
+            | thresholds | S11   | S12   | ...
+            | float      | float | float | ...
+        """
+        port_modes = port_modes or {}
+        s = self.session
+        cs = self.convergence_settings
+
+        # Save original sim settings
+        orig_mesh_accuracy = s.getnamed("FDTD", "mesh accuracy")
+        s.setnamed("FDTD", "mesh accuracy", mesh_accuracy)
+
+        s.select("FDTD::ports")
+        orig_wavl_points = s.get("monitor frequency points")
+        s.set("monitor frequency points", wavl_points)
+
+        converged = False
+        efield_intensity_threshold = 1e-1
+        thresholds = []
+        sparams = {}
+        while not converged:
+            self.convergence_settings.port_field_intensity_threshold = (
+                efield_intensity_threshold
+            )
+            thresholds.append(efield_intensity_threshold)
+            self.update_port_convergence(
+                port_modes=port_modes, mesh_accuracy=mesh_accuracy, verbose=plot
+            )
+            sp = self.write_sparameters(overwrite=True)
+            sp_data = sp.to_dict(orient="list")
+            for k, v in sp_data.items():
+                if not k == "wavelength":
+                    if k not in sparams:
+                        sparams[k] = [abs(np.array(v)) ** 2]
+                    else:
+                        sparams[k].append(abs(np.array(v)) ** 2)
+
+            # Check whether sparams have converged.
+            # Compare previous two iterations of sparams with current iteration of sparams and check whether the
+            # difference is below the sparam_diff threshold
+            if len(thresholds) > 2:
+                sparam_diff = []
+                for v in sparams.values():
+                    # This accounts for multi wavelength convergence check
+                    sparam_diff.append(max(abs(abs(v[-1]) ** 2 - abs(v[-2]) ** 2)))
+                    sparam_diff.append(max(abs(abs(v[-1]) ** 2 - abs(v[-3]) ** 2)))
+                if max(sparam_diff) < cs.sparam_diff:
+                    converged = True
+                    self.convergence_settings.port_field_intensity_threshold = (
+                        efield_intensity_threshold
+                    )
+                    break
+
+            efield_intensity_threshold = efield_intensity_threshold / 10
+
+        sparams["thresholds"] = thresholds
+
+        # Save convergence results
+        df = pd.DataFrame(sparams)
+        df.to_csv(
+            str(
+                self.dirpath / f"{self.component.name}_efield_intensity_convergence.csv"
+            )
+        )
+
+        # Restore simulation settings
+        s.setnamed("FDTD", "mesh accuracy", orig_mesh_accuracy)
+        s.select("FDTD::ports")
+        s.set("monitor frequency points", orig_wavl_points)
+
+        if plot:
+            for k, v in sparams.items():
+                if not k == "threshold":
+                    plt.figure()
+                    plt.plot(sparams["thresholds"], v)
+                    plt.xscale("log")
+                    plt.xlabel("E-Field Intensity Threshold")
+                    plt.ylabel("Magnitude")
+                    plt.title(f"|{k}|^2")
+                    plt.grid("on")
+                    plt.tight_layout()
+                    plt.savefig(
+                        str(
+                            self.dirpath
+                            / f"{self.component.name}_efield_intensity_convergence_{k}.png"
+                        )
+                    )
+
+        return df
 
 
 if __name__ == "__main__":

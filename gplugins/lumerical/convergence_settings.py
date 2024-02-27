@@ -13,7 +13,7 @@ LUMERICAL_EME_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalEme()
 
 
 class ConvergenceSettingsLumericalFdtd(BaseModel):
-    sparam_diff: float = 0.01
+    sparam_diff: float = 0.005
     port_field_intensity_threshold: float = 1e-5
 
     class Config:
