@@ -105,16 +105,129 @@ def main():
         "TiN": "TiN - Palik",
         "Aluminum": "Al (Aluminium) Palik",
     }
-
-    sim = LumericalFdtdSimulation(
-        component=taper,
-        material_map=layer_map,
-        hide=False,
-        run_port_convergence=False,
-        run_mesh_convergence=False,
+    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+    layerstack_lumerical2021 = LayerStack(
+        layers={
+            "clad": LayerLevel(
+                name=None,
+                layer=(99999, 0),
+                thickness=3.0,
+                thickness_tolerance=None,
+                zmin=0.0,
+                zmin_tolerance=None,
+                material="sio2",
+                sidewall_angle=0.0,
+                sidewall_angle_tolerance=None,
+                width_to_z=0.0,
+                z_to_bias=None,
+                mesh_order=9,
+                layer_type="background",
+                mode=None,
+                into=None,
+                resistivity=None,
+                bias=None,
+                derived_layer=None,
+                info={},
+                background_doping_concentration=None,
+                background_doping_ion=None,
+                orientation="100",
+            ),
+            "box": LayerLevel(
+                name=None,
+                layer=(99999, 0),
+                thickness=3.0,
+                thickness_tolerance=None,
+                zmin=-3.0,
+                zmin_tolerance=None,
+                material="sio2",
+                sidewall_angle=0.0,
+                sidewall_angle_tolerance=None,
+                width_to_z=0.0,
+                z_to_bias=None,
+                mesh_order=9,
+                layer_type="background",
+                mode=None,
+                into=None,
+                resistivity=None,
+                bias=None,
+                derived_layer=None,
+                info={},
+                background_doping_concentration=None,
+                background_doping_ion=None,
+                orientation="100",
+            ),
+            "core": LayerLevel(
+                name=None,
+                layer=(1, 0),
+                thickness=0.22,
+                thickness_tolerance=None,
+                zmin=0.0,
+                zmin_tolerance=None,
+                material="si",
+                sidewall_angle=10.0,
+                sidewall_angle_tolerance=None,
+                width_to_z=0.5,
+                z_to_bias=None,
+                mesh_order=2,
+                layer_type="grow",
+                mode=None,
+                into=None,
+                resistivity=None,
+                bias=None,
+                derived_layer=None,
+                info={"active": True},
+                background_doping_concentration=100000000000000.0,
+                background_doping_ion="Boron",
+                orientation="100",
+            ),
+            # KNOWN ISSUE: Lumerical 2021 version of Layer Builder does not support dopants in process file
+        }
     )
-    sp = sim.write_sparameters(overwrite=True)
-    print(sp)
+
+    efield_intensity_thresholds = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+    SIMULATION_SETTINGS_LUMERICAL_FDTD.mesh_accuracy = 6
+    SIMULATION_SETTINGS_LUMERICAL_FDTD.wavelength_points = 1
+    session = None
+    sparams = {'threshold': efield_intensity_thresholds}
+    for thres in efield_intensity_thresholds:
+        LUMERICAL_FDTD_CONVERGENCE_SETTINGS.port_field_intensity_threshold = thres
+        sim = LumericalFdtdSimulation(
+            component=taper,
+            material_map=layer_map,
+            layerstack=layerstack_lumerical2021,
+            session=session,
+            convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+            simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+            hide=False,
+            run_port_convergence=True,
+            run_mesh_convergence=False,
+        )
+        session = sim.session
+        sp = sim.write_sparameters(overwrite=True)
+        sp_data = sp.to_dict(orient='list')
+        for k, v in sp_data.items():
+            if not k == 'wavelength':
+                if not k in sparams:
+                    sparams[k] = v
+                    sparams[k][0] = abs(sparams[k][0]) ** 2
+                else:
+                    sparams[k].append(abs(v[0]) ** 2)
+        print(sp)
+
+    df = pd.DataFrame(sparams)
+    df.to_csv(str(Path(__file__).resolve().parent / f'{taper.name}_efield_intensity_convergence.csv'))
+    for k, v in sparams.items():
+        if not k == 'threshold':
+            plt.figure()
+            plt.plot(sparams['threshold'], sparams[k])
+            plt.xscale('log')
+            plt.xlabel('E-Field Intensity Threshold')
+            plt.ylabel('Magnitude')
+            plt.title(f'|{k}|^2')
+            plt.grid('on')
+            plt.tight_layout()
+            plt.savefig(str(Path(__file__).resolve().parent / f'{taper.name}_efield_intensity_convergence_{k}.png'))
+
     print("Done")
 
 
