@@ -213,6 +213,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         port_height: port height (um).
         port_extension: port extension (um).
         mesh_accuracy: 2 (1: coarse, 2: fine, 3: superfine).
+        material_fit_tolerance: Material fit coefficient
         zmargin: for the FDTD region (um).
         ymargin: for the FDTD region (um).
         xmargin: for the FDTD region (um).
@@ -228,6 +229,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
 
     port_margin: float = 0.2
     port_extension: float = 5.0
+    material_fit_tolerance: float = 0.001
     mesh_accuracy: int = 1
     wavelength_start: float = 1.5
     wavelength_stop: float = 1.6

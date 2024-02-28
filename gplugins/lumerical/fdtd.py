@@ -461,6 +461,19 @@ class LumericalFdtdSimulation:
         )
         draw_geometry(s, gdspath, process_file_path)
 
+        # Fit material models
+        for layer_name in layerstack.to_dict():
+            s.select("layer group")
+            material_name = s.getlayer(layer_name, "pattern material")
+            try:
+                s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
+                s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
+                s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
+            except lumapi.LumApiError:
+                logger.warning(
+                    f"Material {material_name} cannot be found in database, skipping material fit."
+                )
+
         # Add ports
         for i, port in enumerate(ports):
             zmin = layer_to_zmin[port.layer]
