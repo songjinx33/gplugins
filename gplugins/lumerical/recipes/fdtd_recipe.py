@@ -50,99 +50,22 @@ def main():
         "TiN": "TiN - Palik",
         "Aluminum": "Al (Aluminium) Palik",
     }
-    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-
-    layerstack_lumerical2021 = LayerStack(
-        layers={
-            "clad": LayerLevel(
-                name=None,
-                layer=(99999, 0),
-                thickness=3.0,
-                thickness_tolerance=None,
-                zmin=0.0,
-                zmin_tolerance=None,
-                material="sio2",
-                sidewall_angle=0.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.0,
-                z_to_bias=None,
-                mesh_order=9,
-                layer_type="background",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={},
-                background_doping_concentration=None,
-                background_doping_ion=None,
-                orientation="100",
-            ),
-            "box": LayerLevel(
-                name=None,
-                layer=(99999, 0),
-                thickness=3.0,
-                thickness_tolerance=None,
-                zmin=-3.0,
-                zmin_tolerance=None,
-                material="sio2",
-                sidewall_angle=0.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.0,
-                z_to_bias=None,
-                mesh_order=9,
-                layer_type="background",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={},
-                background_doping_concentration=None,
-                background_doping_ion=None,
-                orientation="100",
-            ),
-            "core": LayerLevel(
-                name=None,
-                layer=(1, 0),
-                thickness=0.22,
-                thickness_tolerance=None,
-                zmin=0.0,
-                zmin_tolerance=None,
-                material="si",
-                sidewall_angle=10.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.5,
-                z_to_bias=None,
-                mesh_order=2,
-                layer_type="grow",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={"active": True},
-                background_doping_concentration=100000000000000.0,
-                background_doping_ion="Boron",
-                orientation="100",
-            ),
-            # KNOWN ISSUE: Lumerical 2021 version of Layer Builder does not support dopants in process file
-        }
-    )
 
     recipe = FdtdRecipe(
         component=taper,
         material_map=layer_map,
-        layer_stack=layerstack_lumerical2021,
         convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-        dirpath="/root/PycharmProjects/gdsfactory_sean/gplugins/gplugins/lumerical/tests/test1",
     )
 
     recipe.eval()
 
 
 class FdtdRecipe(DesignRecipe):
+    """
+    FDTD recipe that extracts sparams
+    """
+
     # Setup
     simulation_setup: SimulationSettingsLumericalFdtd | None = (
         SIMULATION_SETTINGS_LUMERICAL_FDTD
@@ -192,6 +115,13 @@ class FdtdRecipe(DesignRecipe):
 
     @eval_decorator
     def eval(self):
+        """
+        Run FDTD recipe to extract sparams
+
+        1. Performs port convergence by resizing ports to ensure E-field intensities decay to specified threshold
+        2. Performs mesh convergence to ensure sparams converge to certain sparam_diff
+        3. Extracts sparams after updating simulation with optimal simulation params
+        """
         sim = LumericalFdtdSimulation(
             component=self.cell,
             material_map=self.material_map,
