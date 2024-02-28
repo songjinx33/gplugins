@@ -23,6 +23,8 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalEme,
 )
 
+import hashlib
+
 um = 1e-6
 cm = 1e-2
 
@@ -112,6 +114,24 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         self.design_intent = design_intent or RoutingTaperDesignIntent()
         self.simulation_setup = simulation_setup
         self.convergence_setup = convergence_setup
+
+    def __hash__(self) -> bytes:
+        """
+        Returns a hash of all state and setup this DesignRecipe contains.
+        This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
+
+        Hashed items:
+        - design intent
+        - simulation setup
+        - convergence setup
+        """
+        h = hashlib.sha1()
+        byte_hash = super().__hash__()
+        h.update(byte_hash)
+        h.update(self.simulation_setup.model_dump_json().encode("utf-8"))
+        h.update(self.convergence_setup.model_dump_json().encode("utf-8"))
+        h.update(self.design_intent.model_dump_json().encode("utf-8"))
+        return h.digest()
 
     @eval_decorator
     def eval(
