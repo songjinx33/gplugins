@@ -208,10 +208,9 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     """Lumerical FDTD simulation_settings.
 
     Parameters:
-        background_material: for the background.
         port_margin: on both sides of the port width (um).
-        port_height: port height (um).
-        port_extension: port extension (um).
+        port_extension: port extension that extends waveguide passed ports (um).
+        port_translation: Translate port by x microns away from (positive) or toward (negative) the device.
         mesh_accuracy: 2 (1: coarse, 2: fine, 3: superfine).
         material_fit_tolerance: Material fit coefficient
         zmargin: for the FDTD region (um).
@@ -219,7 +218,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         xmargin: for the FDTD region (um).
         wavelength_start: 1.2 (um).
         wavelength_stop: 1.6 (um).
-        wavelength_points: 500.
+        wavelength_points: wavelength points for sparams.
         simulation_time: (s) related to max path length
             3e8/2.4*10e-12*1e6 = 1.25mm.
         simulation_temperature: in kelvin (default = 300).
@@ -229,6 +228,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
 
     port_margin: float = 0.2
     port_extension: float = 5.0
+    port_translation: float = 0.0
     material_fit_tolerance: float = 0.001
     mesh_accuracy: int = 1
     wavelength_start: float = 1.5

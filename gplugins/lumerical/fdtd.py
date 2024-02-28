@@ -184,7 +184,7 @@ def main():
             # KNOWN ISSUE: Lumerical 2021 version of Layer Builder does not support dopants in process file
         }
     )
-
+    SIMULATION_SETTINGS_LUMERICAL_FDTD.port_translation = 1.0
     sim = LumericalFdtdSimulation(
         component=taper,
         material_map=layer_map,
@@ -474,6 +474,14 @@ class LumericalFdtdSimulation:
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )
 
+        # Get current FDTD region bounds. When adding ports, if the port is outside the FDTD region, correct FDTD bounds
+        fdtd_xmin = s.getnamed("FDTD", "x min")
+        fdtd_ymin = s.getnamed("FDTD", "y min")
+        fdtd_zmin = s.getnamed("FDTD", "z min")
+        fdtd_xmax = s.getnamed("FDTD", "x max")
+        fdtd_ymax = s.getnamed("FDTD", "y max")
+        fdtd_zmax = s.getnamed("FDTD", "z max")
+
         # Add ports
         for i, port in enumerate(ports):
             zmin = layer_to_zmin[port.layer]
@@ -483,8 +491,6 @@ class LumericalFdtdSimulation:
 
             s.addport()
             p = f"FDTD::ports::port {i + 1}"
-            s.setnamed(p, "x", port.x * um)
-            s.setnamed(p, "y", port.y * um)
             s.setnamed(p, "z", z * um)
             s.setnamed(p, "z span", zspan * um)
             s.setnamed(p, "frequency dependent profile", ss.frequency_dependent_profile)
@@ -494,21 +500,29 @@ class LumericalFdtdSimulation:
             if -45 <= deg <= 45:
                 direction = "Backward"
                 injection_axis = "x-axis"
+                s.setnamed(p, "x", (port.x + ss.port_translation) * um)
+                s.setnamed(p, "y", port.y * um)
                 dxp = 0
                 dyp = 2 * ss.port_margin + port.width
             elif 45 < deg < 90 + 45:
                 direction = "Backward"
                 injection_axis = "y-axis"
+                s.setnamed(p, "x", port.x * um)
+                s.setnamed(p, "y", (port.y - ss.port_translation) * um)
                 dxp = 2 * ss.port_margin + port.width
                 dyp = 0
             elif 90 + 45 < deg < 180 + 45:
                 direction = "Forward"
                 injection_axis = "x-axis"
+                s.setnamed(p, "x", (port.x - ss.port_translation) * um)
+                s.setnamed(p, "y", port.y * um)
                 dxp = 0
                 dyp = 2 * ss.port_margin + port.width
             elif 180 + 45 < deg < 180 + 45 + 90:
                 direction = "Forward"
                 injection_axis = "y-axis"
+                s.setnamed(p, "x", port.x * um)
+                s.setnamed(p, "y", (port.y + ss.port_translation) * um)
                 dxp = 2 * ss.port_margin + port.width
                 dyp = 0
 
@@ -521,6 +535,33 @@ class LumericalFdtdSimulation:
             s.setnamed(p, "injection axis", injection_axis)
             s.setnamed(p, "y span", dyp * um)
             s.setnamed(p, "x span", dxp * um)
+
+            # Correct FDTD bounds if ports are outside FDTD region
+            port_xmin = s.getnamed(p, "x min")
+            port_ymin = s.getnamed(p, "y min")
+            port_zmin = s.getnamed(p, "z min")
+            port_xmax = s.getnamed(p, "x max")
+            port_ymax = s.getnamed(p, "y max")
+            port_zmax = s.getnamed(p, "z max")
+            if port_xmin < fdtd_xmin:
+                fdtd_xmin = port_xmin - ss.port_margin * um
+                s.setnamed("FDTD", "x min", fdtd_xmin)
+            if port_ymin < fdtd_ymin:
+                fdtd_ymin = port_ymin - ss.port_margin * um
+                s.setnamed("FDTD", "y min", fdtd_ymin)
+            if port_zmin < fdtd_zmin:
+                fdtd_zmin = port_zmin - ss.port_margin * um
+                s.setnamed("FDTD", "z min", fdtd_zmin)
+            if port_xmax > fdtd_xmax:
+                fdtd_xmax = port_xmax + ss.port_margin * um
+                s.setnamed("FDTD", "x max", fdtd_xmax)
+            if port_ymax > fdtd_ymax:
+                fdtd_ymax = port_ymax + ss.port_margin * um
+                s.setnamed("FDTD", "y max", fdtd_ymax)
+            if port_zmax > fdtd_zmax:
+                fdtd_zmax = port_zmax + ss.port_margin * um
+                s.setnamed("FDTD", "z max", fdtd_zmax)
+
             s.setnamed(p, "name", port.name)
 
             logger.info(
