@@ -133,11 +133,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         return int.from_bytes(h.digest(), "big")
 
     @eval_decorator
-    def eval(
-        self,
-        simulation_setup: SimulationSettingsLumericalEme | None = None,
-        convergence_setup: ConvergenceSettingsLumericalEme | None = None,
-    ):
+    def eval(self):
         r"""
         Run taper design recipe.
 
@@ -160,17 +156,11 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 c) The component must be the shortest
         2. Run FDTD simulation to extract s-params for best component
 
-        Parameters
-            simulation_setup: Simulation settings
-            convergence_setup: Convergence settings
 
         """
-        ss = simulation_setup or self.simulation_setup
-        cs = convergence_setup or self.convergence_setup
+        ss = self.simulation_setup
+        cs = self.convergence_setup
         di = self.design_intent
-
-        self.simulation_setup = ss
-        self.convergence_setup = cs
 
         # Sweep geometry
         components = [
