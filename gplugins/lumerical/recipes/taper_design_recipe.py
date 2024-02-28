@@ -1,3 +1,4 @@
+import hashlib
 import typing
 from functools import partial
 from pathlib import Path
@@ -22,8 +23,6 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
 )
-
-import hashlib
 
 um = 1e-6
 cm = 1e-2

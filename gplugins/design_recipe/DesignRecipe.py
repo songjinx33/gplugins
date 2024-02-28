@@ -51,11 +51,15 @@ class DesignRecipe:
         self.material_map = material_map
         self.layer_stack = layer_stack
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> bytes:
         """
         Returns a hash of all state this DesignRecipe contains.
         Subclasses should include functionality-specific state (e.g. fdtd settings) here.
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
+
+        Hashed items:
+        - component or cell
+        - layer stack
         """
         h = hashlib.sha1()
         if self.cell is not None:
@@ -64,7 +68,7 @@ class DesignRecipe:
             elif type(self.cell) == Component:
                 h.update(self.cell.hash_geometry(precision=1e-4).encode("utf-8"))
         h.update(self.layer_stack.model_dump_json().encode("utf-8"))
-        return int.from_bytes(h.digest(), "big")
+        return h.digest()
 
     def is_fresh(self) -> bool:
         """
