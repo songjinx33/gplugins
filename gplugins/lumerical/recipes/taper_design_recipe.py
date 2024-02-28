@@ -114,7 +114,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         self.simulation_setup = simulation_setup
         self.convergence_setup = convergence_setup
 
-    def __hash__(self) -> bytes:
+    def __hash__(self) -> int:
         """
         Returns a hash of all state and setup this DesignRecipe contains.
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
@@ -125,12 +125,12 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         - convergence setup
         """
         h = hashlib.sha1()
-        byte_hash = super().__hash__()
-        h.update(byte_hash)
+        int_hash = super().__hash__()
+        h.update(int_hash.to_bytes(int_hash.bit_length() + 7 // 8, byteorder="big"))
         h.update(self.simulation_setup.model_dump_json().encode("utf-8"))
         h.update(self.convergence_setup.model_dump_json().encode("utf-8"))
         h.update(self.design_intent.model_dump_json().encode("utf-8"))
-        return h.digest()
+        return int.from_bytes(h.digest(), "big")
 
     @eval_decorator
     def eval(

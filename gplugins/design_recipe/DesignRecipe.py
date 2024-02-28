@@ -51,7 +51,7 @@ class DesignRecipe:
         self.material_map = material_map
         self.layer_stack = layer_stack
 
-    def __hash__(self) -> bytes:
+    def __hash__(self) -> int:
         """
         Returns a hash of all state this DesignRecipe contains.
         Subclasses should include functionality-specific state (e.g. fdtd settings) here.
@@ -68,7 +68,7 @@ class DesignRecipe:
             elif type(self.cell) == Component:
                 h.update(self.cell.hash_geometry(precision=1e-4).encode("utf-8"))
         h.update(self.layer_stack.model_dump_json().encode("utf-8"))
-        return h.digest()
+        return int.from_bytes(h.digest(), "big")
 
     def is_fresh(self) -> bool:
         """
