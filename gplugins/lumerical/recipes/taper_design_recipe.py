@@ -155,8 +155,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 b) The component must have the lowest reflections
                 c) The component must be the shortest
         2. Run FDTD simulation to extract s-params for best component
-
-
         """
         ss = self.simulation_setup
         cs = self.convergence_setup

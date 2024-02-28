@@ -234,6 +234,7 @@ class LumericalFdtdSimulation:
         hide: bool = True,
         run_mesh_convergence: bool = False,
         run_port_convergence: bool = False,
+        run_field_intensity_convergence: bool = False,
         xmargin: float = 0,
         ymargin: float = 0,
         xmargin_left: float = 0,
@@ -272,6 +273,10 @@ class LumericalFdtdSimulation:
                 Defaults to active Pdk.sparameters_path.
             hide: Hide simulation if True, else show GUI
             run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
+            run_port_convergence: If True, run port convergence where ports are resized based on E-field intensity
+                threshold. Edges of the port must decay to this threshold.
+            run_field_intensity_convergence: If True, run sweep of E-field intensity threshold vs. sparam convergence.
+                Then, update the E-field intensity threshold to suit desired sparam convergence (sparam_diff).
             xmargin: left/right distance from component to PML.
             xmargin_left: left distance from component to PML.
             xmargin_right: right distance from component to PML.
@@ -535,10 +540,12 @@ class LumericalFdtdSimulation:
         filepath_sim_settings.write_text(yaml.dump(sim_settings))
 
         # Run convergence if specified
-        if run_port_convergence:
+        if run_field_intensity_convergence:
             self.field_intensity_convergence_data = (
                 self.update_field_intensity_threshold(plot=not hide)
             )
+
+        if run_port_convergence:
             self.update_port_convergence(verbose=not hide)
 
         if run_mesh_convergence:
