@@ -162,14 +162,14 @@ class SimulationSettingsLumericalEme(BaseModel):
     wavelength_stop: float = 1.6
     material_fit_tolerance: float = 0.001
 
-    group_cells: list[int] = [1, 50, 1]
+    group_cells: list[int] = [1, 30, 1]
     group_subcell_methods: list[Literal["CVCS"] | None] = [None, "CVCS", None]
     num_modes: int = 30
     energy_conservation: Literal[
         "make passive", "conserve energy"
     ] | None = "make passive"
 
-    mesh_cells_per_wavelength: int = 100
+    mesh_cells_per_wavelength: int = 60
 
     ymin_boundary: Literal[
         "Metal", "PML", "Anti-Symmetric", "Symmetric"

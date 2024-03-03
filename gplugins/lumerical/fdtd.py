@@ -1120,24 +1120,30 @@ class LumericalFdtdSimulation:
 
         # Collect sparam results
         sparams = {
-            "mesh_accuracy": mesh_accuracies,
+            "mesh_accuracy": [],
             "wavelength": [],
         }
         for i in range(0, len(convergence_sims)):
             s.load(convergence_sims[i])
-            s.loadsweep()
+            try:
+                s.loadsweep()
 
-            # Get sparam data
-            data = s.getsweepresult("s-parameter sweep", "S parameters")
-            # Add wavelength data
-            sparams["wavelength"].append(data["lambda"][0:wavl_points])
+                # Get sparam data
+                data = s.getsweepresult("s-parameter sweep", "S parameters")
+                # Add wavelength data
+                sparams["wavelength"].append(data["lambda"][0:wavl_points])
+                sparams["mesh_accuracy"].append(mesh_accuracies[i])
 
-            sparam_keys = data["Lumerical_dataset"]["attributes"]
-            for sparam in sparam_keys:
-                if sparam not in sparams:
-                    sparams[sparam] = [abs(data[sparam][0:wavl_points]) ** 2]
-                else:
-                    sparams[sparam].append(abs(data[sparam][0:wavl_points]) ** 2)
+                sparam_keys = data["Lumerical_dataset"]["attributes"]
+                for sparam in sparam_keys:
+                    if sparam not in sparams:
+                        sparams[sparam] = [abs(data[sparam][0:wavl_points]) ** 2]
+                    else:
+                        sparams[sparam].append(abs(data[sparam][0:wavl_points]) ** 2)
+            except lumapi.LumApiError as err:
+                logger.warning(
+                    f"{err} | Failed to load sparam data from {s.filebasename(s.currentfilename())}.fsp"
+                )
 
         # Get mesh accuracy where sparams converge
         converged = False
