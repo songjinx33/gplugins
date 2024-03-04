@@ -303,7 +303,7 @@ class LumericalFdtdSimulation:
                  |_______|_______________________|
 
         """
-        if isinstance(dirpath, str):
+        if isinstance(dirpath, str) and not dirpath == "":
             dirpath = Path(dirpath)
         self.dirpath = dirpath = dirpath or Path(__file__).resolve().parent
 
@@ -425,7 +425,7 @@ class LumericalFdtdSimulation:
         draw_geometry(s, gdspath, process_file_path)
 
         # Fit material models
-        for layer_name in layerstack.to_dict():
+        for layer_name in layer_stack.to_dict():
             s.select("layer group")
             material_name = s.getlayer(layer_name, "pattern material")
             try:
@@ -618,8 +618,8 @@ class LumericalFdtdSimulation:
         s.setsweep("S sweep", "auto symmetry", True)
         s.runsweep()
         sp = s.getsweepresult("s-parameter sweep", "S parameters")
-        s.exportsweep("s-parameter sweep", str(filepath))
-        logger.info(f"Writing Sparameters to {str(filepath)!r}")
+        s.exportsweep("s-parameter sweep", str(filepath.absolute()))
+        logger.info(f"Writing Sparameters to {str(filepath.absolute())!r}")
 
         sp["wavelengths"] = sp.pop("lambda").flatten() / um
         np.savez_compressed(self.filepath_npz, **sp)
@@ -1168,7 +1168,7 @@ class LumericalFdtdSimulation:
     def update_field_intensity_threshold(
         self,
         port_modes: dict | None = None,
-        mesh_accuracy: int = 6,
+        mesh_accuracy: int = 4,
         wavl_points: int = 1,
         plot: bool = False,
     ) -> pd.DataFrame:
