@@ -34,13 +34,9 @@ class DesignRecipe:
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
 
-    # Material map that maps materials from the layer_stack to the simulators' materials
-    material_map: dict[str, str]
-
     def __init__(
         self,
         cell: ComponentFactory | Component,
-        material_map: dict[str, str] = None,
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
     ):
@@ -48,7 +44,6 @@ class DesignRecipe:
         self.dependencies = dr.ConstituentRecipes(dependencies)
         self.cell = cell
         self.last_hash = -1
-        self.material_map = material_map
         self.layer_stack = layer_stack
 
     def __hash__(self) -> int:

@@ -52,15 +52,7 @@ def example_run_taper_design_recipe():
         width=3.0,
     )
 
-    ### 2. DEFINE LAYER STACK AND MATERIAL MAPPING FROM PDK TO LUMERICAL
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
-
+    ### 2. DEFINE LAYER STACK
     from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
     layerstack_lumerical = LayerStack(
@@ -116,7 +108,6 @@ def example_run_taper_design_recipe():
         cross_section1=narrow_waveguide_cross_section,
         cross_section2=wide_waveguide_cross_section,
         design_intent=design_intent,
-        material_map=layer_map,
         layer_stack=layerstack_lumerical,
         simulation_setup=eme_simulation_setup,
         convergence_setup=eme_convergence_setup,
@@ -126,7 +117,6 @@ def example_run_taper_design_recipe():
 
     fdtd_recipe = FdtdRecipe(
         component=eme_recipe.component,
-        material_map=layer_map,
         layer_stack=layerstack_lumerical,
         simulation_setup=fdtd_simulation_setup,
         convergence_setup=fdtd_convergence_setup,
@@ -214,7 +204,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         cross_section1: CrossSectionSpec | None = gf.cross_section.cross_section,
         cross_section2: CrossSectionSpec | None = gf.cross_section.cross_section,
         design_intent: RoutingTaperDesignIntent | None = None,
-        material_map: dict[str, str] | None = None,
         layer_stack: LayerStack | None = None,
         simulation_setup: SimulationSettingsLumericalEme
         | None = LUMERICAL_EME_SIMULATION_SETTINGS,
@@ -242,14 +231,13 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             cross_section1: Left cross section
             cross_section2: Right cross section
             design_intent: Taper design intent
-            material_map: Mapping of PDK materials to Lumerical materials
             layer_stack: PDK layerstack
             simulation_setup: EME simulation setup
             convergence_setup: EME convergence setup
             dirpath: Directory to save files
         """
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(cell=cell, material_map=material_map, layer_stack=layer_stack)
+        super().__init__(cell=cell, layer_stack=layer_stack)
         self.cross_section1 = cross_section1
         self.cross_section2 = cross_section2
         self.dirpath = dirpath or Path(__file__).resolve().parent
@@ -313,7 +301,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             try:
                 sim = LumericalEmeSimulation(
                     component=component,
-                    material_map=self.material_map,
                     layerstack=self.layer_stack,
                     simulation_settings=ss,
                     convergence_settings=cs,

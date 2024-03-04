@@ -49,15 +49,7 @@ def example_run_taper_design_recipe():
         width_type="parabolic",
     )
 
-    ### 2. DEFINE LAYER STACK AND MATERIAL MAPPING FROM PDK TO LUMERICAL
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
-
+    ### 2. DEFINE LAYER STACK
     from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
     layerstack_lumerical = LayerStack(
@@ -105,7 +97,6 @@ def example_run_taper_design_recipe():
     ### 4. CREATE AND RUN DESIGN RECIPE
     recipe = FdtdRecipe(
         component=taper,
-        material_map=layer_map,
         layer_stack=layerstack_lumerical,
         convergence_setup=fdtd_convergence_setup,
         simulation_setup=fdtd_simulation_setup,
@@ -144,7 +135,6 @@ class FdtdRecipe(DesignRecipe):
     def __init__(
         self,
         component: Component | None = None,
-        material_map: dict[str, str] | None = None,
         layer_stack: LayerStack | None = None,
         simulation_setup: SimulationSettingsLumericalFdtd
         | None = SIMULATION_SETTINGS_LUMERICAL_FDTD,
@@ -157,16 +147,13 @@ class FdtdRecipe(DesignRecipe):
 
         Parameters:
             component: Component
-            material_map: Mapping between PDK materials and Lumerical materials
             layer_stack: PDK layer stack
             simulation_setup: FDTD simulation setup
             convergence_setup: FDTD convergence setup
             dirpath: Directory to store files.
         """
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(
-            cell=component, material_map=material_map, layer_stack=layer_stack
-        )
+        super().__init__(cell=component, layer_stack=layer_stack)
         self.dirpath = dirpath or Path(__file__).resolve().parent
         self.simulation_setup = simulation_setup
         self.convergence_setup = convergence_setup
@@ -199,7 +186,6 @@ class FdtdRecipe(DesignRecipe):
         """
         sim = LumericalFdtdSimulation(
             component=self.cell,
-            material_map=self.material_map,
             layerstack=self.layer_stack,
             simulation_settings=self.simulation_setup,
             convergence_settings=self.convergence_setup,

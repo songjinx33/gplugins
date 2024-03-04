@@ -76,16 +76,8 @@ def main():
         width_type="parabolic",
     )
 
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
     sim = LumericalEmeSimulation(
         taper,
-        layer_map,
         run_mesh_convergence=False,
         run_cell_convergence=False,
         run_mode_convergence=False,
@@ -93,12 +85,7 @@ def main():
     )
 
     data = sim.get_length_sweep()
-
-    # sim.plot_mode_coupling(1, 10)
-    # sim.plot_length_sweep()
-    # sim.plot_neff_vs_position()
-    print(data)
-    print("done")
+    logger.info(f"{data}\nDone")
 
 
 class LumericalEmeSimulation:
@@ -107,7 +94,6 @@ class LumericalEmeSimulation:
 
     Attributes:
         component: Component geometry to simulate
-        material_map: Map of PDK materials to Lumerical materials
         layerstack: PDK layerstack
         session: Lumerical session
         simulation_settings: EME simulation settings
@@ -122,7 +108,6 @@ class LumericalEmeSimulation:
     def __init__(
         self,
         component: Component,
-        material_map: dict[str, str],
         layerstack: LayerStack | None = None,
         session: lumapi.MODE | None = None,
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
@@ -140,7 +125,6 @@ class LumericalEmeSimulation:
 
         Parameters:
             component: Component geometry to simulate
-            material_map: Map of PDK materials to Lumerical materials
             layerstack: PDK layerstack
             session: Lumerical session
             simulation_settings: EME simulation settings
@@ -181,10 +165,9 @@ class LumericalEmeSimulation:
         layerstack = layerstack or get_layer_stack()
 
         # Save instance variables
-        self.component = component
-        self.material_map = material_map
         self.simulation_settings = ss
         self.convergence_settings = convergence_settings
+        self.component = component
         self.layerstack = layerstack
         self.dirpath = dirpath
 
@@ -221,7 +204,9 @@ class LumericalEmeSimulation:
         component_extended_beyond_pml.name = "top"
         gdspath = component_extended_beyond_pml.write_gds()
 
-        process_file_path = layerstack_to_lbr(material_map, layerstack, dirpath)
+        process_file_path = layerstack_to_lbr(
+            ss.material_name_to_lumerical, layerstack, dirpath
+        )
 
         # Create device geometry
         draw_geometry(s, gdspath, process_file_path)

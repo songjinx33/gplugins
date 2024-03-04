@@ -98,13 +98,6 @@ def main():
         width_type="parabolic",
     )
 
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
     from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
     layerstack_lumerical2021 = LayerStack(
@@ -187,12 +180,11 @@ def main():
     SIMULATION_SETTINGS_LUMERICAL_FDTD.port_translation = 1.0
     sim = LumericalFdtdSimulation(
         component=taper,
-        material_map=layer_map,
         layerstack=layerstack_lumerical2021,
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         hide=False,
-        run_port_convergence=True,
+        run_port_convergence=False,
         run_mesh_convergence=False,
     )
 
@@ -209,7 +201,6 @@ class LumericalFdtdSimulation:
 
     Attributes:
         component: Component geometry to simulate
-        material_map: Map of PDK materials to Lumerical materials
         layerstack: PDK layerstack
         session: Lumerical session
         simulation_settings: FDTD simulation settings
@@ -224,7 +215,6 @@ class LumericalFdtdSimulation:
     def __init__(
         self,
         component: Component,
-        material_map: dict[str, str],
         layerstack: LayerStack | None = None,
         session: lumapi.FDTD | None = None,
         simulation_settings: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
@@ -263,7 +253,6 @@ class LumericalFdtdSimulation:
 
         Args:
             component: Component to simulate.
-            material_map: Map of PDK materials to Lumerical materials
             layerstack: PDK layerstack
             session: you can pass a session=lumapi.FDTD() or it will create one.
             simulation_settings: dataclass with all simulation_settings.
@@ -435,11 +424,6 @@ class LumericalFdtdSimulation:
         s.selectall()
         s.deleteall()
 
-        material_name_to_lumerical_new = material_map or {}
-        material_name_to_lumerical = ss.material_name_to_lumerical.copy()
-        material_name_to_lumerical.update(**material_name_to_lumerical_new)
-        self.material_map = material_name_to_lumerical
-
         s.addfdtd(
             dimension="3D",
             x_min=x_min,
@@ -456,7 +440,7 @@ class LumericalFdtdSimulation:
 
         ### Create Layer Builder object and insert geometry
         process_file_path = layerstack_to_lbr(
-            material_name_to_lumerical, layer_stack, dirpath
+            ss.material_name_to_lumerical, layer_stack, dirpath
         )
         draw_geometry(s, gdspath, process_file_path)
 

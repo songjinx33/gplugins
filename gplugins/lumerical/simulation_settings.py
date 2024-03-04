@@ -133,6 +133,18 @@ simulation_settings_fdtd = [
 ]
 
 
+material_name_to_lumerical_default = {
+    "si": "Si (Silicon) - Palik",
+    "sio2": "SiO2 (Glass) - Palik",
+    "sin": "Si3N4 (Silicon Nitride) - Phillip",
+    "tungsten": "W (tungsten) - Palik",
+    "cu": "Cu (copper) - CRC",
+    "air": "Air",
+    "TiN": "TiN - Palik",
+    "Aluminum": "Al (Aluminium) Palik",
+}
+
+
 class SimulationSettingsLumericalEme(BaseModel):
     """Lumerical EME simulation_settings.
 
@@ -161,6 +173,7 @@ class SimulationSettingsLumericalEme(BaseModel):
     wavelength_start: float = 1.5
     wavelength_stop: float = 1.6
     material_fit_tolerance: float = 0.001
+    material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
 
     group_cells: list[int] = [1, 30, 1]
     group_subcell_methods: list[Literal["CVCS"] | None] = [None, "CVCS", None]
@@ -192,16 +205,6 @@ class SimulationSettingsLumericalEme(BaseModel):
 
 
 LUMERICAL_EME_SIMULATION_SETTINGS = SimulationSettingsLumericalEme()
-
-
-material_name_to_lumerical_default = {
-    "si": "Si (Silicon) - Palik",
-    "sio2": "SiO2 (Glass) - Palik",
-    "sin": "Si3N4 (Silicon Nitride) - Phillip",
-    "tungsten": "W (tungsten) - Palik",
-    "cu": "Cu (copper) - CRC",
-    "air": "Air",
-}
 
 
 class SimulationSettingsLumericalFdtd(BaseModel):
