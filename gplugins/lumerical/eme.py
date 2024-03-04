@@ -738,7 +738,18 @@ class LumericalEmeSimulation:
                 "s22": s22,
             }
         )
-        length_sweep.to_csv(
+
+        length_sweep2 = pd.DataFrame.from_dict(
+            {
+                "length": [L[0] for L in group_span],
+                "s11": list(abs(S["s11"]) ** 2),
+                "s21": list(abs(S["s21"]) ** 2),
+                "s12": list(abs(S["s12"]) ** 2),
+                "s22": list(abs(S["s22"]) ** 2),
+            }
+        )
+
+        length_sweep2.to_csv(
             str(self.dirpath / f"{self.component.name}_length_sweep.csv")
         )
         return length_sweep
