@@ -1,21 +1,26 @@
-from enum import Enum
-import time
 import shutil
-import yaml
+import time
+from enum import Enum
 
-import lumapi 
-import numpy as np
 import gdsfactory as gf
+import lumapi
+import numpy as np
+import yaml
+from gdsfactory.config import PathType, logger
+from gdsfactory.generic_tech.simulation_settings import (  # TODO wildcard imports are bad
+    SIMULATION_SETTINGS_LUMERICAL_FDTD,
+    SimulationSettingsLumerical,
+    SimulationSettingsLumericalFdtd,
+)
+from gdsfactory.pdk import get_layer_stack
+from gdsfactory.typings import Component, LayerStack, MaterialSpec
 
-from gdsfactory.pdk import ComponentSpec, get_layer_stack
 from gplugins.common.utils.get_sparameters_path import (
     get_sparameters_path_lumerical as get_sparameters_path,
 )
-from gdsfactory.typings import Component, LayerStack, MaterialSpec
-from gdsfactory.config import PathType, __version__, logger
-from gdsfactory.generic_tech.simulation_settings import SimulationSettingsLumerical, SimulationSettingsLumericalFdtd, SIMULATION_SETTINGS_LUMERICAL_FDTD # TODO wildcard imports are bad
-
-from gplugins.lumerical.write_charge_distribution_lumerical import add_charge_materials, add_doping, write_charge_distribution_lumerical
+from gplugins.lumerical.write_charge_distribution_lumerical import (
+    add_charge_materials,
+)
 from gplugins.lumerical.write_sparameters_lumerical import set_material
 
 DEBUG_LUMERICAL = 1
@@ -34,31 +39,31 @@ class Engine(Enum):
     CHARGE = 1
 
 
-def draw_geometry(component: Component,
-                  session: object | None,
-                  sim_settings: SimulationSettingsLumerical,
-                  layer_stack: LayerStack,
-                  engine: Engine):
-
+def draw_geometry(
+    component: Component,
+    session: object | None,
+    sim_settings: SimulationSettingsLumerical,
+    layer_stack: LayerStack,
+    engine: Engine,
+):
     if engine == Engine.FDTD:
-        if (not session):
+        if not session:
             session = lumapi.FDTD()
     elif engine == Engine.CHARGE:
-        if (not session):
+        if not session:
             session = lumapi.DEVICE()
-        add_charge_materials(session) # DEVICE needs materials to be defined manually for some reason
+        add_charge_materials(
+            session
+        )  # DEVICE needs materials to be defined manually for some reason
     else:
         logger.Warn("unsupported engine passed to draw_geometry!")
         return False
-
 
     component_with_booleans = layer_stack.get_component_with_derived_layers(component)
     component_layers = component_with_booleans.get_layers()
     layer_to_thickness = layer_stack.get_layer_to_thickness()
     layer_to_zmin = layer_stack.get_layer_to_zmin()
     layer_to_material = layer_stack.get_layer_to_material()
-
-
 
     # pad boundaries so the device doesn't interact with lumerical boundary conditions
     component_with_padding = gf.add_padding_container(
@@ -97,12 +102,15 @@ def draw_geometry(component: Component,
     ]
 
     last_layer_idx = np.argmax(layers_zmin)
-    component_thickness = layers_zmin[last_layer_idx] + \
-        layers_thickness[last_layer_idx] - min(layers_zmin)
+    component_thickness = (
+        layers_zmin[last_layer_idx]
+        + layers_thickness[last_layer_idx]
+        - min(layers_zmin)
+    )
 
     component_zmin = min(layers_zmin)
     z = (component_zmin - sim_settings.zmargin) * 1e-6
-    z = (component_zmin + component_thickness/2) * 1e-6
+    z = (component_zmin + component_thickness / 2) * 1e-6
     z_span = (2 * sim_settings.zmargin + component_thickness) * 1e-6
 
     x_min = (component_extended.xmin - sim_settings.xmargin) * 1e-6
@@ -134,24 +142,29 @@ def draw_geometry(component: Component,
 
         session.setnamed("simulation region", "name", "CHARGE simulation region")
         session.setnamed("CHARGE simulation region", "dimension", 4)
-        session.setnamed("CHARGE simulation region", "x",0)
-        session.setnamed("CHARGE simulation region", "y",0)
-        session.setnamed("CHARGE simulation region", "z",z)
+        session.setnamed("CHARGE simulation region", "x", 0)
+        session.setnamed("CHARGE simulation region", "y", 0)
+        session.setnamed("CHARGE simulation region", "z", z)
         session.setnamed("CHARGE simulation region", "x span", x_span)
         session.setnamed("CHARGE simulation region", "y span", y_span)
-        session.setnamed("CHARGE simulation region", "z span",z_span)
+        session.setnamed("CHARGE simulation region", "z span", z_span)
 
-        session.setnamed("CHARGE","simulation region", "CHARGE simulation region");
+        session.setnamed("CHARGE", "simulation region", "CHARGE simulation region")
 
     # draw device by importing layer GDSes into lumerical
-    for name, layer_obj in layer_stack.layers.items():# layer, thickness in layer_to_thickness.items():
+    for (
+        name,
+        layer_obj,
+    ) in layer_stack.layers.items():  # layer, thickness in layer_to_thickness.items():
         layer = layer_obj.layer
         thickness = layer_obj.thickness
 
-        #layer = layer_obj.
-        logger.info(f"handling layer {layer}");
+        # layer = layer_obj.
+        logger.info(f"handling layer {layer}")
         if layer not in component_layers:
-            logger.info(f"skipping layer {layer} because it isn't present in the component")
+            logger.info(
+                f"skipping layer {layer} because it isn't present in the component"
+            )
             continue
 
         if layer not in layer_to_material:
@@ -172,13 +185,11 @@ def draw_geometry(component: Component,
         z = (zmax + zmin) / 2
 
         print("material ", material)
-        if (material == "Air" and engine != "DEVICE"):
+        if material == "Air" and engine != "DEVICE":
             logger.info("Skipping {material} because this is not a DEVICE simulation")
             continue  # Air is only used in DEVICE sims
 
-        session.gdsimport(
-                str(gdspath),
-                "top", f"{layer[0]}:{layer[1]}")
+        session.gdsimport(str(gdspath), "top", f"{layer[0]}:{layer[1]}")
         layername = f"GDS_LAYER_{layer[0]}:{layer[1]}"
         session.setnamed(layername, "z", z * 1e-6)
         session.setnamed(layername, "z span", thickness * 1e-6)
@@ -186,9 +197,14 @@ def draw_geometry(component: Component,
         logger.info(f"adding {layer}, thickness = {thickness} um, zmin = {zmin} um ")
     return True
 
-def add_ports(self, session: object, engine: str, simulation_settings: SimulationSettingsLumerical):
+
+def add_ports(
+    self, session: object, engine: str, simulation_settings: SimulationSettingsLumerical
+):
     port_type = "optical" if engine == Engine.FDTD else "electrical"
-    logger.info(f"size of ports list {len(self.component.get_ports_list(port_type=port_type))}")
+    logger.info(
+        f"size of ports list {len(self.component.get_ports_list(port_type=port_type))}"
+    )
     for i, port in enumerate(self.component.get_ports_list(port_type=port_type)):
         zmin = self.layer_stack.get_layer_to_zmin()[port.layer]
         thickness = self.layer_stack.get_layer_to_thickness()[port.layer]
@@ -201,10 +217,16 @@ def add_ports(self, session: object, engine: str, simulation_settings: Simulatio
         session.setnamed(p, "y", port.y * 1e-6)
         session.setnamed(p, "z", z * 1e-6)
         session.setnamed(p, "z span", zspan * 1e-6)
-        session.setnamed(p, "frequency dependent profile",
-                   simulation_settings.frequency_dependent_profile)
-        session.setnamed(p, "number of field profile samples",
-                   simulation_settings.field_profile_samples)
+        session.setnamed(
+            p,
+            "frequency dependent profile",
+            simulation_settings.frequency_dependent_profile,
+        )
+        session.setnamed(
+            p,
+            "number of field profile samples",
+            simulation_settings.field_profile_samples,
+        )
 
         deg = int(port.orientation)
         # if port.orientation not in [0, 90, 180, 270]:
@@ -248,7 +270,10 @@ def add_ports(self, session: object, engine: str, simulation_settings: Simulatio
             f"port {p} {port.name!r}: at ({port.x}, {port.y}, 0)"
             f"size = ({dxp}, {dyp}, {zspan})"
         )
-def write_sparameters_lumerical(self,
+
+
+def write_sparameters_lumerical(
+    self,
     session: object | None = None,
     overwrite: bool = False,
     run: bool = True,
@@ -265,7 +290,7 @@ def write_sparameters_lumerical(self,
     zmargin: float = 1.0,
     **settings,
 ) -> np.ndarray:
-    start_time:w = time.time()
+    start_time: w = time.time()
 
     session = session or lumapi.FDTD(hide=False)
 
@@ -274,17 +299,19 @@ def write_sparameters_lumerical(self,
     sim_setting_overrides.update(dict(layer_stack=self.layer_stack.to_dict()))
     sim_settings = SimulationSettingsLumericalFdtd(**sim_setting_overrides)
 
-    self.draw_geometry(session=session,
-                       engine="FDTD",
-                       xmargin=xmargin,
-                       ymargin=ymargin,
-                       xmargin_left=xmargin_left,
-                       xmargin_right=xmargin_right,
-                       ymargin_top=ymargin_top,
-                       ymargin_bot=ymargin_bot,
-                       zmargin=zmargin,
-                       sim_settings=sim_settings,
-                       **settings)
+    self.draw_geometry(
+        session=session,
+        engine="FDTD",
+        xmargin=xmargin,
+        ymargin=ymargin,
+        xmargin_left=xmargin_left,
+        xmargin_right=xmargin_right,
+        ymargin_top=ymargin_top,
+        ymargin_bot=ymargin_bot,
+        zmargin=zmargin,
+        sim_settings=sim_settings,
+        **settings,
+    )
 
     logger.info("ADDING PORTS")
     self.add_ports(session, "FDTD", sim_settings)
@@ -315,7 +342,9 @@ def write_sparameters_lumerical(self,
 
     session.setglobalsource("wavelength stop", sim_settings.wavelength_stop * 1e-6)
     session.setglobalsource("wavelength start", sim_settings.wavelength_start * 1e-6)
-    session.setnamed("FDTD::ports", "monitor frequency points", sim_settings.wavelength_points)
+    session.setnamed(
+        "FDTD::ports", "monitor frequency points", sim_settings.wavelength_points
+    )
 
     if run:
         session.save(str(filepath_fsp))
@@ -347,19 +376,22 @@ def write_sparameters_lumerical(self,
         return sp
     return session
 
+
 class Lumerical:
     component = Component()
-    material_name_to_lumerical: dict[str, str]  = {}
+    material_name_to_lumerical: dict[str, str] = {}
     layer_stack = get_layer_stack()
     device_session = None
     fdtd_session = None
     device_component = None
     fdtd_component = None
 
-    def __init__(self,
+    def __init__(
+        self,
         component: Component,
         layer_stack: LayerStack,
-        material_name_to_lumerical: dict[str, str] = {}):
+        material_name_to_lumerical: dict[str, str] = {},
+    ):
         self.material_name_to_lumerical = material_name_to_lumerical_default
         self.material_name_to_lumerical.update(**material_name_to_lumerical)
         # TODO this is upstreamed, update gdsfactory version
@@ -370,11 +402,12 @@ class Lumerical:
         self.layer_stack = layer_stack
         self.component = component
 
-    def run_charge(self,
+    def run_charge(
+        self,
         bias_port: str,
         constant_ports: str,
         bias_voltages: list[float],
-        constant_voltage: float =0):
+        constant_voltage: float = 0,
+    ):
         pass
-        #write_charge_distribution_lumerical(self.component,
-
+        # write_charge_distribution_lumerical(self.component,

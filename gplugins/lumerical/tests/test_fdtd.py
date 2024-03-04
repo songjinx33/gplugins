@@ -1,13 +1,14 @@
 import gdsfactory as gf
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL
+from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_SETTINGS
 from gplugins.lumerical.fdtd import LumericalFdtdSimulation
 from gplugins.lumerical.simulation_settings import SIMULATION_SETTINGS_LUMERICAL_FDTD
-from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_SETTINGS
 
 
 def test_lumerical_fdtd_simulation():
     from functools import partial
+
     from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(
@@ -41,4 +42,3 @@ def test_lumerical_fdtd_simulation():
     )
 
     sim.write_sparameters(overwrite=True)
-

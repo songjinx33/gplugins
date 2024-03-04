@@ -1,7 +1,6 @@
 """Write charge distribution with Lumerical CHARGE."""
 from __future__ import annotations
 
-import shutil
 import time
 from typing import TYPE_CHECKING
 
@@ -19,7 +18,6 @@ from gdsfactory.technology import LayerStack
 from gplugins.common.utils.get_sparameters_path import (
     get_sparameters_path_lumerical as get_sparameters_path,
 )
-
 from gplugins.lumerical.write_sparameters_lumerical import set_material
 
 if TYPE_CHECKING:
@@ -33,27 +31,39 @@ run=False returns the simulation session for you to debug and make sure it is co
 To compute the Sparameters you need to pass run=True
 """
 
-# It seems like CHARGE doesn't start with any materials defined, so we define them here
-def add_charge_material(s:object, name: str, em:Optional[str], ct:Optional[str]):
-   s.addmodelmaterial();
-   s.set("name",name)
-   #s.set("color",[0.85, 0, 0, 1]) # red
-   if em:
-       s.addmaterialproperties("EM",em)  # importing from optical material database
 
-   if ct:
-       s.select(f"materials::{name}")
-       s.addmaterialproperties("CT",ct)  # importing from electrical material database
+# It seems like CHARGE doesn't start with any materials defined, so we define them here
+def add_charge_material(s: object, name: str, em: Optional[str], ct: Optional[str]):
+    s.addmodelmaterial()
+    s.set("name", name)
+    # s.set("color",[0.85, 0, 0, 1]) # red
+    if em:
+        s.addmaterialproperties("EM", em)  # importing from optical material database
+
+    if ct:
+        s.select(f"materials::{name}")
+        s.addmaterialproperties("CT", ct)  # importing from electrical material database
+
 
 def add_charge_materials(s: object):
-    add_charge_material(s,"Si (Silicon) - Palik","Si (Silicon) - Palik","Si (Silicon)")
-    add_charge_material(s,"SiO2 (Glass) - Palik","SiO2 (Glass) - Palik", "SiO2 (Glass) - Sze")
-    logger.warning("TODO find palik glass characterization, using Sze for now") # just because the mapping says palik
-    add_charge_material(s,"Si3N4 (Silicon Nitride) - Phillip","Si3N4 (Silicon Nitride) - Phillip", "Si3N4 (Silicon Nitride) - Sze")
-    add_charge_material(s, "W (tungsten) - Palik",   "W (tungsten) - Palik", None)
+    add_charge_material(
+        s, "Si (Silicon) - Palik", "Si (Silicon) - Palik", "Si (Silicon)"
+    )
+    add_charge_material(
+        s, "SiO2 (Glass) - Palik", "SiO2 (Glass) - Palik", "SiO2 (Glass) - Sze"
+    )
+    logger.warning(
+        "TODO find palik glass characterization, using Sze for now"
+    )  # just because the mapping says palik
+    add_charge_material(
+        s,
+        "Si3N4 (Silicon Nitride) - Phillip",
+        "Si3N4 (Silicon Nitride) - Phillip",
+        "Si3N4 (Silicon Nitride) - Sze",
+    )
+    add_charge_material(s, "W (tungsten) - Palik", "W (tungsten) - Palik", None)
     add_charge_material(s, "Cu (copper) - CRC", None, "Cu (copper) - CRC")
     add_charge_material(s, "Air", None, "Air")
-
 
 
 def write_charge_distribution_lumerical(
@@ -295,12 +305,12 @@ def write_charge_distribution_lumerical(
     start = time.time()
     s = session or lumapi.DEVICE(hide=False)
     s.newproject()
-    #s.deleteall()
+    # s.deleteall()
     s.clear()
     add_charge_materials(s)
 
-    # add si and 
-    print( component_with_booleans.get_layers())
+    # add si and
+    print(component_with_booleans.get_layers())
 
     print("adding cladding...")
     s.addrect(
@@ -313,7 +323,7 @@ def write_charge_distribution_lumerical(
         z_span=z_span,
         name="clad",
     )
-    s.set("alpha", .1)
+    s.set("alpha", 0.1)
 
     material_name_to_lumerical_new = material_name_to_lumerical or {}
     material_name_to_lumerical = ss.material_name_to_lumerical.copy()
@@ -333,9 +343,11 @@ def write_charge_distribution_lumerical(
 
     print(component_layers)
     for layer, thickness in layer_to_thickness.items():
-        logger.info(f"handling layer {layer}");
+        logger.info(f"handling layer {layer}")
         if layer not in component_layers:
-            logger.info(f"skipping layer {layer} because it isn't present in the component")
+            logger.info(
+                f"skipping layer {layer} because it isn't present in the component"
+            )
             continue
 
         if layer not in layer_to_material:
@@ -362,12 +374,9 @@ def write_charge_distribution_lumerical(
         set_material(session=s, structure=layername, material=material)
         logger.info(f"adding {layer}, thickness = {thickness} um, zmin = {zmin} um ")
 
-
     if run:
         s.save(str(filepath_fsp))
         print("TODO elam figure add sweep + run for CHARGE")
 
-
     filepath_sim_settings.write_text(yaml.dump(sim_settings))
     return s
-
