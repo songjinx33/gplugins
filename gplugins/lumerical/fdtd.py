@@ -20,6 +20,7 @@ from gdsfactory.technology import LayerStack
 from gplugins.common.utils.get_sparameters_path import (
     get_sparameters_path_lumerical as get_sparameters_path,
 )
+from gplugins.lumerical.config import marker_list, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalFdtd,
@@ -51,27 +52,6 @@ run=False returns the simulation session for you to debug and make sure it is co
 
 To compute the Sparameters you need to pass run=True
 """
-
-um = 1e-6
-marker_list = [
-    "o",
-    "v",
-    "^",
-    "<",
-    ">",
-    "1",
-    "2",
-    "3",
-    "4",
-    "s",
-    "p",
-    "P",
-    "*",
-    "h",
-    "+",
-    "X",
-    "D",
-] * 10
 
 
 def main():

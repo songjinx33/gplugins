@@ -20,6 +20,7 @@ from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology.layer_stack import LayerStack
 from gdsfactory.typings import PathType
 
+from gplugins.lumerical.config import marker_list, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_EME_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalEme,
@@ -29,27 +30,6 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalEme,
 )
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
-
-um = 1e-6
-marker_list = [
-    "o",
-    "v",
-    "^",
-    "<",
-    ">",
-    "1",
-    "2",
-    "3",
-    "4",
-    "s",
-    "p",
-    "P",
-    "*",
-    "h",
-    "+",
-    "X",
-    "D",
-] * 10
 
 
 def main():

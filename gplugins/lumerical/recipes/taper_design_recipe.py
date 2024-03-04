@@ -14,6 +14,7 @@ from gdsfactory.typings import ComponentFactory, CrossSectionSpec, PathType, Wid
 from pydantic import BaseModel
 
 from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
+from gplugins.lumerical.config import cm, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_EME_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalEme,
@@ -26,9 +27,6 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalEme,
     SimulationSettingsLumericalFdtd,
 )
-
-um = 1e-6
-cm = 1e-2
 
 
 def example_run_taper_design_recipe():

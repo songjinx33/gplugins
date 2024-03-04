@@ -9,9 +9,7 @@ from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 from gdsfactory.typings import PathType
 
-from gplugins.lumerical.config import ENABLE_DOPING
-
-um = 1e-6
+from gplugins.lumerical.config import ENABLE_DOPING, um
 
 
 def layerstack_to_lbr(
