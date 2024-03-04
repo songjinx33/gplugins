@@ -85,8 +85,6 @@ class DesignRecipe:
         """
         success = self.eval_dependencies(force_rerun_all)
 
-        # TODO find some way to automatically hook into eval()'s subclasses
-        # and update last_hash  at the end? can maybe use decorators?
         self.last_hash = hash(self)
         return success
 
