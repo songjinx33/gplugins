@@ -340,6 +340,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             f"{components[i].name} ({components[i].settings.get('width_type', 'Shape Unknown')})": f"L: {optimal_lengths[i]} | T: {transmission_coefficients[i]} | R: {reflection_coefficients[i]}"
             for i in range(0, len(simulated_components))
         }
+        with open(str(self.dirpath / "optimal_lengths.txt"), "w") as f:
+            f.write(f"{results}")
         logger.info(f"{results}")
 
         # Get best component
