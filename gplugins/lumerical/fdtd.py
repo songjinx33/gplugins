@@ -192,7 +192,6 @@ def main():
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         hide=False,
-        dirpath="/root/PycharmProjects/gdsfactory_sean/gplugins/gplugins/lumerical/tests",
         run_port_convergence=True,
         run_mesh_convergence=False,
     )
@@ -213,8 +212,8 @@ class LumericalFdtdSimulation:
         material_map: Map of PDK materials to Lumerical materials
         layerstack: PDK layerstack
         session: Lumerical session
-        simulation_settings: EME simulation settings
-        convergence_settings: EME convergence settings
+        simulation_settings: FDTD simulation settings
+        convergence_settings: FDTD convergence settings
         dirpath: Directory where simulation files are saved
         filepath_npz: S-parameter filepath (npz)
         filepath_fsp: FDTD simulation filepath (fsp)
@@ -1282,7 +1281,9 @@ class LumericalFdtdSimulation:
         df = pd.DataFrame(sparams)
         df.to_csv(
             str(
-                self.dirpath / f"{self.component.name}_efield_intensity_convergence.csv"
+                self.dirpath
+                / f"{self.component.name}_convergence"
+                / f"{self.component.name}_fdtd_efield_intensity_convergence.csv"
             )
         )
 
@@ -1305,7 +1306,8 @@ class LumericalFdtdSimulation:
                     plt.savefig(
                         str(
                             self.dirpath
-                            / f"{self.component.name}_efield_intensity_convergence_{k}.png"
+                            / f"{self.component.name}_convergence"
+                            / f"{self.component.name}_fdtd_efield_intensity_convergence_{k}.png"
                         )
                     )
 
@@ -1313,21 +1315,4 @@ class LumericalFdtdSimulation:
 
 
 if __name__ == "__main__":
-    # import lumapi
-    #
-    # s = lumapi.FDTD()
-    # component = gf.components.mmi1x2()
-    # material_name_to_lumerical = dict(
-    #     si="Si (Silicon) - Palik",
-    #     substrate="Si (Silicon) - Palik",
-    #     box="SiO2 (Glass) - Palik",
-    #     clad="SiO2 (Glass) - Palik",
-    # )  # or dict(si=3.45+2j)
-    #
-    # r = write_sparameters_lumerical(
-    #     component=component,
-    #     material_name_to_lumerical=material_name_to_lumerical,
-    #     run=False,
-    #     session=s,
-    # )
     main()

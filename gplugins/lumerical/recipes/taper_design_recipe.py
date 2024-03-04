@@ -146,7 +146,8 @@ class RoutingTaperDesignIntent(BaseModel):
 
     Attributes:
         narrow_waveguide_routing_loss_per_cm: Narrow waveguide routing loss (dB/cm)
-        max_reflection: Maximum reflections to
+        max_reflection: Maximum reflections to consider. Anything above this threshold does not determine device selection.
+                        Anything below this threshold will affect device selection.
         start_length: Starting length in length sweep (um)
         stop_length: Ending length in length sweep (um)
         num_pts: Number of points to consider in length sweep
@@ -180,6 +181,16 @@ class RoutingTaperDesignIntent(BaseModel):
 class RoutingTaperDesignRecipe(DesignRecipe):
     """
     Routing taper design recipe.
+
+    Attributes:
+        component: Optimal component geometry
+        length_sweep: Length sweep results
+        cross_section1: Left cross section
+        cross_section2: Right cross section
+        design_intent: Taper design intent
+        simulation_setup: EME simulation setup
+        convergence_setup: EME convergence setup
+        dirpath: Directory to save files
     """
 
     # Design intent
@@ -211,6 +222,32 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         | None = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = None,
     ):
+        r"""
+        Set up routing taper design recipe
+
+                         |       |
+                         |      /|---------
+                         |    /  |
+                         |  /    |
+        -----------------|/      |
+        cross section 1  | taper | cross section 2
+        -----------------|\      |
+                         |  \    |
+                         |    \  |
+                         |      \|---------
+                         |       |
+
+        Parameters:
+            cell: Taper cell that uses cross sections to determine both ends of the taper
+            cross_section1: Left cross section
+            cross_section2: Right cross section
+            design_intent: Taper design intent
+            material_map: Mapping of PDK materials to Lumerical materials
+            layer_stack: PDK layerstack
+            simulation_setup: EME simulation setup
+            convergence_setup: EME convergence setup
+            dirpath: Directory to save files
+        """
         layer_stack = layer_stack or get_layer_stack()
         super().__init__(cell=cell, material_map=material_map, layer_stack=layer_stack)
         self.cross_section1 = cross_section1
@@ -242,18 +279,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
     def eval(self):
         r"""
         Run taper design recipe.
-
-                         |       |
-                         |      /|---------
-                         |    /  |
-                         |  /    |
-        -----------------|/      |
-        cross section 1  | taper | cross section 2
-        -----------------|\      |
-                         |  \    |
-                         |    \  |
-                         |      \|---------
-                         |       |
 
         1. Sweep taper geometry in EME and get best geometry and length for component.
                 Best component is derived from the following (in order):
@@ -376,99 +401,3 @@ class RoutingTaperDesignRecipe(DesignRecipe):
 
 if __name__ == "__main__":
     example_run_taper_design_recipe()
-    # layer_map = {
-    #     "si": "Si (Silicon) - Palik",
-    #     "sio2": "SiO2 (Glass) - Palik",
-    #     "sin": "Si3N4 (Silicon Nitride) - Phillip",
-    #     "TiN": "TiN - Palik",
-    #     "Aluminum": "Al (Aluminium) Palik",
-    # }
-    # from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-    #
-    # layerstack_lumerical2021 = LayerStack(
-    #     layers={
-    #         "clad": LayerLevel(
-    #             name=None,
-    #             layer=(99999, 0),
-    #             thickness=3.0,
-    #             thickness_tolerance=None,
-    #             zmin=0.0,
-    #             zmin_tolerance=None,
-    #             material="sio2",
-    #             sidewall_angle=0.0,
-    #             sidewall_angle_tolerance=None,
-    #             width_to_z=0.0,
-    #             z_to_bias=None,
-    #             mesh_order=9,
-    #             layer_type="background",
-    #             mode=None,
-    #             into=None,
-    #             resistivity=None,
-    #             bias=None,
-    #             derived_layer=None,
-    #             info={},
-    #             background_doping_concentration=None,
-    #             background_doping_ion=None,
-    #             orientation="100",
-    #         ),
-    #         "box": LayerLevel(
-    #             name=None,
-    #             layer=(99999, 0),
-    #             thickness=3.0,
-    #             thickness_tolerance=None,
-    #             zmin=-3.0,
-    #             zmin_tolerance=None,
-    #             material="sio2",
-    #             sidewall_angle=0.0,
-    #             sidewall_angle_tolerance=None,
-    #             width_to_z=0.0,
-    #             z_to_bias=None,
-    #             mesh_order=9,
-    #             layer_type="background",
-    #             mode=None,
-    #             into=None,
-    #             resistivity=None,
-    #             bias=None,
-    #             derived_layer=None,
-    #             info={},
-    #             background_doping_concentration=None,
-    #             background_doping_ion=None,
-    #             orientation="100",
-    #         ),
-    #         "core": LayerLevel(
-    #             name=None,
-    #             layer=(1, 0),
-    #             thickness=0.22,
-    #             thickness_tolerance=None,
-    #             zmin=0.0,
-    #             zmin_tolerance=None,
-    #             material="si",
-    #             sidewall_angle=2.0,
-    #             sidewall_angle_tolerance=None,
-    #             width_to_z=0.5,
-    #             z_to_bias=None,
-    #             mesh_order=2,
-    #             layer_type="grow",
-    #             mode=None,
-    #             into=None,
-    #             resistivity=None,
-    #             bias=None,
-    #             derived_layer=None,
-    #             info={"active": True},
-    #             background_doping_concentration=100000000000000.0,
-    #             background_doping_ion="Boron",
-    #             orientation="100",
-    #         ),
-    #         # KNOWN ISSUE: Lumerical 2021 version of Layer Builder does not support dopants in process file
-    #     }
-    # )
-    #
-    # LUMERICAL_EME_CONVERGENCE_SETTINGS.sparam_diff = 1 - 10 ** (-0.0025 / 10)
-    # taper_recipe = RoutingTaperDesignRecipe(
-    #     material_map=layer_map,
-    #     simulation_setup=LUMERICAL_EME_SIMULATION_SETTINGS,
-    #     convergence_setup=LUMERICAL_EME_CONVERGENCE_SETTINGS,
-    #     layer_stack=layerstack_lumerical2021,
-    # )
-    # success = taper_recipe.eval()
-    # logger.info("Done")

@@ -4,6 +4,7 @@ from pathlib import Path
 import gdsfactory as gf
 import pandas as pd
 from gdsfactory import Component
+from gdsfactory.config import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import PathType
 
@@ -19,7 +20,12 @@ from gplugins.lumerical.simulation_settings import (
 )
 
 
-def main():
+def example_run_taper_design_recipe():
+    ### 0. DEFINE WHERE FILES ARE SAVED
+    dirpath = Path(__file__).parent / "recipe_runs" / "fdtd_recipe"
+    dirpath.mkdir(parents=True, exist_ok=True)
+
+    ### 1. DEFINE DESIGN
     from functools import partial
 
     from gdsfactory.components.taper_cross_section import taper_cross_section
@@ -43,6 +49,7 @@ def main():
         width_type="parabolic",
     )
 
+    ### 2. DEFINE LAYER STACK AND MATERIAL MAPPING FROM PDK TO LUMERICAL
     layer_map = {
         "si": "Si (Silicon) - Palik",
         "sio2": "SiO2 (Glass) - Palik",
@@ -51,19 +58,76 @@ def main():
         "Aluminum": "Al (Aluminium) Palik",
     }
 
+    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+
+    layerstack_lumerical = LayerStack(
+        layers={
+            "clad": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=0.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "box": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=-3.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "core": LayerLevel(
+                layer=(1, 0),
+                thickness=0.22,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            ),
+        }
+    )
+
+    ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
+    fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
+        mesh_accuracy=2, port_translation=1.0
+    )
+    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
+        port_field_intensity_threshold=1e-6, sparam_diff=0.01
+    )
+
+    ### 4. CREATE AND RUN DESIGN RECIPE
     recipe = FdtdRecipe(
         component=taper,
         material_map=layer_map,
-        convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-        simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+        layer_stack=layerstack_lumerical,
+        convergence_setup=fdtd_convergence_setup,
+        simulation_setup=fdtd_simulation_setup,
     )
 
-    recipe.eval()
+    success = recipe.eval()
+
+    if success:
+        logger.info("Completed FDTD recipe.")
+    else:
+        logger.info("Incomplete run of FDTD recipe.")
 
 
 class FdtdRecipe(DesignRecipe):
     """
     FDTD recipe that extracts sparams
+
+    Attributes:
+        simulation_setup: FDTD simulation setup
+        convergence_setup: FDTD convergence setup
+        dirpath: Directory to store files.
+        sparameters: s-parameter results.
     """
 
     # Setup
@@ -88,6 +152,17 @@ class FdtdRecipe(DesignRecipe):
         | None = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = None,
     ):
+        """
+        Set up FDTD recipe
+
+        Parameters:
+            component: Component
+            material_map: Mapping between PDK materials and Lumerical materials
+            layer_stack: PDK layer stack
+            simulation_setup: FDTD simulation setup
+            convergence_setup: FDTD convergence setup
+            dirpath: Directory to store files.
+        """
         layer_stack = layer_stack or get_layer_stack()
         super().__init__(
             cell=component, material_map=material_map, layer_stack=layer_stack
@@ -144,4 +219,4 @@ class FdtdRecipe(DesignRecipe):
 
 
 if __name__ == "__main__":
-    main()
+    example_run_taper_design_recipe()

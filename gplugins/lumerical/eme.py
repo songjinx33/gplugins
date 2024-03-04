@@ -105,21 +105,6 @@ class LumericalEmeSimulation:
     """
     Lumerical EME simulation
 
-    Set up EME simulation based on component geometry and simulation settings. Optionally, run convergence.
-
-    Parameters:
-        component: Component geometry to simulate
-        material_map: Map of PDK materials to Lumerical materials
-        layerstack: PDK layerstack
-        session: Lumerical session
-        simulation_settings: EME simulation settings
-        convergence_settings: EME convergence settings
-        dirpath: Directory where simulation files are saved
-        hide: Hide simulation if True, else show GUI
-        run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
-        run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
-        run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
-
     Attributes:
         component: Component geometry to simulate
         material_map: Map of PDK materials to Lumerical materials
@@ -150,6 +135,23 @@ class LumericalEmeSimulation:
         run_overall_convergence: bool = False,
         **settings,
     ):
+        """
+        Set up EME simulation based on component geometry and simulation settings. Optionally, run convergence.
+
+        Parameters:
+            component: Component geometry to simulate
+            material_map: Map of PDK materials to Lumerical materials
+            layerstack: PDK layerstack
+            session: Lumerical session
+            simulation_settings: EME simulation settings
+            convergence_settings: EME convergence settings
+            dirpath: Directory where simulation files are saved
+            hide: Hide simulation if True, else show GUI
+            run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
+            run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
+            run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
+            run_overall_convergence: If True, run combination of mesh and cell convergence to quicken convergence.
+        """
         # Set up variables
         dirpath = dirpath or Path(__file__).resolve().parent
         simulation_settings = dict(simulation_settings)
