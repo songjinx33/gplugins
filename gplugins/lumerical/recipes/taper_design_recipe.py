@@ -33,7 +33,7 @@ cm = 1e-2
 
 def example_run_taper_design_recipe():
     ### 0. DEFINE WHERE FILES ARE SAVED
-    dirpath = Path(__file__).parent / "example_runs" / "taper_design_recipe"
+    dirpath = Path(__file__).parent / "recipe_runs" / "taper_design_recipe"
     dirpath.mkdir(parents=True, exist_ok=True)
 
     ### 1. DEFINE DESIGN INTENT
