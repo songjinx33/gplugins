@@ -408,14 +408,22 @@ class LumericalEmeSimulation:
             plt.ylabel("Magnitude")
             plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_mesh_convergence.png")
+                str(
+                    self.dirpath
+                    / f"{self.component.name}_convergence"
+                    / f"{self.component.name}_eme_mesh_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"mesh_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_mesh_convergence.csv")
+            str(
+                self.dirpath
+                / f"{self.component.name}_convergence"
+                / f"{self.component.name}_eme_mesh_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -483,14 +491,22 @@ class LumericalEmeSimulation:
             plt.title(f"Cell Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_cell_convergence.png")
+                str(
+                    self.dirpath
+                    / f"{self.component.name}_convergence"
+                    / f"{self.component.name}_eme_cell_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_cell_convergence.csv")
+            str(
+                self.dirpath
+                / f"{self.component.name}_convergence"
+                / f"{self.component.name}_eme_cell_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -559,14 +575,22 @@ class LumericalEmeSimulation:
             plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_mode_convergence.png")
+                str(
+                    self.dirpath
+                    / f"{self.component.name}_convergence"
+                    / f"{self.component.name}_eme_mode_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_mode_convergence.csv")
+            str(
+                self.dirpath
+                / f"{self.component.name}_convergence"
+                / f"{self.component.name}_eme_mode_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -669,7 +693,11 @@ class LumericalEmeSimulation:
             plt.title(f"Overall Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_overall_convergence.png")
+                str(
+                    self.dirpath
+                    / f"{self.component.name}_convergence"
+                    / f"{self.component.name}_eme_overall_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
@@ -681,7 +709,11 @@ class LumericalEmeSimulation:
             }
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_overall_convergence.csv")
+            str(
+                self.dirpath
+                / f"{self.component.name}_convergence"
+                / f"{self.component.name}_eme_overall_convergence.csv"
+            )
         )
         return convergence_data
 

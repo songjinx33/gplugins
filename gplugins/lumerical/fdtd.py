@@ -1178,7 +1178,7 @@ class LumericalFdtdSimulation:
             plt.xlabel("Mesh Accuracy")
             plt.grid("on")
             plt.tight_layout()
-            plt.savefig(str(p / f"{self.component.name}_mesh_convergence.png"))
+            plt.savefig(str(p / f"{self.component.name}_fdtd_mesh_convergence.png"))
 
         # If not converged, set to maximum mesh accuracy
         if not converged:
@@ -1197,7 +1197,9 @@ class LumericalFdtdSimulation:
         s.set("monitor frequency points", orig_wavl_points)
 
         convergence_data = pd.DataFrame(sparams)
-        convergence_data.to_csv(str(p / f"{self.component.name}_mesh_convergence.csv"))
+        convergence_data.to_csv(
+            str(p / f"{self.component.name}_fdtd_mesh_convergence.csv")
+        )
         return convergence_data
 
     def update_field_intensity_threshold(
