@@ -20,7 +20,7 @@ from gplugins.lumerical.simulation_settings import (
 )
 
 
-def example_run_taper_design_recipe():
+def example_run_fdtd_recipe():
     ### 0. DEFINE WHERE FILES ARE SAVED
     dirpath = Path(__file__).parent / "recipe_runs" / "fdtd_recipe"
     dirpath.mkdir(parents=True, exist_ok=True)
@@ -205,4 +205,4 @@ class FdtdRecipe(DesignRecipe):
 
 
 if __name__ == "__main__":
-    example_run_taper_design_recipe()
+    example_run_fdtd_recipe()
