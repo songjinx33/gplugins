@@ -27,7 +27,6 @@ def example_run_fdtd_recipe():
 
     ### 1. DEFINE DESIGN
     from functools import partial
-
     from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(
@@ -193,15 +192,12 @@ class FdtdRecipe(DesignRecipe):
             hide=False,  # TODO: Make global var to decide when to show sims
             run_mesh_convergence=True,
             run_port_convergence=True,
-            run_field_intensity_convergence=False,
+            run_field_intensity_convergence=True,
         )
 
         self.sparameters = sim.write_sparameters(
             overwrite=True, delete_fsp_files=True, plot=True
         )
-
-        # Rehash since convergence testing updates simulation parameters
-        self.last_hash = hash(self)
 
 
 if __name__ == "__main__":

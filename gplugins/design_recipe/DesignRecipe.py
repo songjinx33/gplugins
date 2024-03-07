@@ -116,10 +116,11 @@ def eval_decorator(func):
         """
         Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
         """
+        self = args[0]
+        self.last_hash = hash(self)
         # Evaluate the design recipe
         func(*args, **kwargs)
         # Evaluate independent recipes
-        self = args[0]
         success = self.eval_dependencies()
         # Update hash
         self.last_hash = hash(self)

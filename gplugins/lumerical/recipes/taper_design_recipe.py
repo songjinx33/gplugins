@@ -113,14 +113,13 @@ def example_run_taper_design_recipe():
     )
     success = eme_recipe.eval()
 
-    fdtd_recipe = FdtdRecipe(
-        component=eme_recipe.component,
-        layer_stack=layerstack_lumerical,
-        simulation_setup=fdtd_simulation_setup,
-        convergence_setup=fdtd_convergence_setup,
-        dirpath=dirpath,
-    )
-    success = success and fdtd_recipe.eval()
+    fdtd_recipes = [FdtdRecipe(component=c,
+                               layer_stack=layerstack_lumerical,
+                               simulation_setup=fdtd_simulation_setup,
+                               convergence_setup=fdtd_convergence_setup,
+                               dirpath=dirpath) for c in eme_recipe.components]
+    for recipe in fdtd_recipes:
+        success = success and recipe.eval()
 
     if success:
         logger.info("Completed taper design recipe.")
@@ -172,6 +171,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
 
     Attributes:
         component: Optimal component geometry
+        components: Components simulated (passed onto FDTD for verification)
         length_sweep: Length sweep results
         cross_section1: Left cross section
         cross_section2: Right cross section
@@ -353,6 +353,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         with open(str(self.dirpath / "optimal_lengths.txt"), "w") as f:
             f.write(f"{results}")
         logger.info(f"{results}")
+        self.components = simulated_components
 
         # Get best component
         # Most optimal component is one with smallest length AND least reflections
