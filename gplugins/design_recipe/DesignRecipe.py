@@ -6,7 +6,9 @@ from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
+from pathlib import Path
 
+import pickle
 import gplugins.design_recipe as dr
 
 
@@ -33,6 +35,9 @@ class DesignRecipe:
 
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
+
+    # Run convergence if True. Accurate simulations come from simulations that have run convergence.
+    run_convergence: bool = True
 
     def __init__(
         self,
@@ -100,6 +105,73 @@ class DesignRecipe:
                 success = success and recipe.eval(force_rerun_all)
         return success
 
+class RecipeResults:
+    """
+    Design recipe results are stored in this dynamic class.
+
+    This class allows designers to arbitrarily add results. Results are pickled to be saved onto working system.
+    Results can be retrieved via unpickling.
+    """
+
+    def __init__(self, dirpath: Path | None = None, **kwargs):
+        if isinstance(dirpath, str):
+            dirpath = Path(dirpath)
+        self.dirpath = dirpath or Path(__file__).resolve().parent
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def save_pickle(self, dirpath: Path | None = None):
+        """
+        Save results by pickling as 'recipe_results.pkl' file
+
+        Parameters:
+            dirpath: Directory to store pickle file
+        """
+        if dirpath == None:
+            with open(str(self.dirpath / 'recipe_results.pkl'), 'wb') as f:
+                pickle.dump(self, f)
+        else:
+            with open(str(dirpath / 'recipe_results.pkl'), 'wb') as f:
+                pickle.dump(self, f)
+
+    def get_pickle(self, dirpath: Path | None = None) -> object:
+        """
+        Get results from 'recipe_results.pkl' file
+
+        Parameters:
+            dirpath: Directory to get pickle file
+
+        Returns:
+            RecipeResults as an object with results
+        """
+        if isinstance(dirpath, str):
+            dirpath = Path(dirpath)
+        if dirpath == None:
+            with open(str(self.dirpath / 'recipe_results.pkl'), 'rb') as f:
+                results = pickle.load(f)
+        else:
+            with open(str(dirpath / 'recipe_results.pkl'), 'rb') as f:
+                results = pickle.load(f)
+
+        return results
+
+    def available(self, dirpath: Path | None = None) -> bool:
+        """
+        Check if 'recipe_results.pkl' file exists and results can be loaded
+
+        Parameters:
+            dirpath: Directory with pickle file
+
+        Returns:
+            True if results exist, False otherwise.
+        """
+        if isinstance(dirpath, str):
+            dirpath = Path(dirpath)
+        if dirpath == None:
+            results_file = self.dirpath / 'recipe_results.pkl'
+        else:
+            results_file = dirpath / 'recipe_results.pkl'
+        return results_file.is_file()
 
 def eval_decorator(func):
     """
@@ -117,7 +189,11 @@ def eval_decorator(func):
         Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
         """
         self = args[0]
+        if "run_convergence" in kwargs:
+            self.run_convergence = kwargs["run_convergence"]
         self.last_hash = hash(self)
+        # Check if results already available. Results must be stored in directory with the same hash.
+
         # Evaluate the design recipe
         func(*args, **kwargs)
         # Evaluate independent recipes

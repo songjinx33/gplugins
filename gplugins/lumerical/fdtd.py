@@ -164,7 +164,7 @@ def main():
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         hide=False,
-        run_port_convergence=False,
+        run_port_convergence=True,
         run_mesh_convergence=False,
     )
 
