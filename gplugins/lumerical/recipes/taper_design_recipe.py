@@ -358,7 +358,15 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         with open(str(self.dirpath / "optimal_lengths.txt"), "w") as f:
             f.write(f"{results}")
         logger.info(f"{results}")
-        self.components = simulated_components
+        self.components = [
+            self.cell(
+                cross_section1=self.cross_section1,
+                cross_section2=self.cross_section2,
+                length=optimal_lengths[i],  # um
+                width_type=simulated_components[i]["width_type"],
+            )
+            for i in range(0, len(simulated_components))
+        ]
 
         # Get best component
         # Most optimal component is one with smallest length AND least reflections
