@@ -27,6 +27,7 @@ def example_run_fdtd_recipe():
 
     ### 1. DEFINE DESIGN
     from functools import partial
+
     from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(

@@ -70,7 +70,7 @@ def main():
 
 class LumericalEmeSimulation:
     """
-    Lumerical EME simulation
+    Lumerical EME simulation plugin for running EME simulations on GDSFactory designs
 
     Attributes:
         component: Component geometry to simulate
@@ -313,6 +313,9 @@ class LumericalEmeSimulation:
 
         if not hide:
             plt.show()
+
+    def set_simulation_region(self, component: Component):
+        pass
 
     def update_mesh_convergence(self, plot: bool = False) -> pd.DataFrame:
         """

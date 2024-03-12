@@ -113,11 +113,16 @@ def example_run_taper_design_recipe():
     )
     success = eme_recipe.eval()
 
-    fdtd_recipes = [FdtdRecipe(component=c,
-                               layer_stack=layerstack_lumerical,
-                               simulation_setup=fdtd_simulation_setup,
-                               convergence_setup=fdtd_convergence_setup,
-                               dirpath=dirpath) for c in eme_recipe.components]
+    fdtd_recipes = [
+        FdtdRecipe(
+            component=c,
+            layer_stack=layerstack_lumerical,
+            simulation_setup=fdtd_simulation_setup,
+            convergence_setup=fdtd_convergence_setup,
+            dirpath=dirpath,
+        )
+        for c in eme_recipe.components
+    ]
     for recipe in fdtd_recipes:
         success = success and recipe.eval()
 
