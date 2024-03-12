@@ -32,42 +32,6 @@ from gplugins.lumerical.simulation_settings import (
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
 
 
-def main():
-    from functools import partial
-
-    from gdsfactory.components.taper_cross_section import taper_cross_section
-
-    xs_wg = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=0.5,
-    )
-
-    xs_wg_wide = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=2.0,
-    )
-
-    taper = taper_cross_section(
-        cross_section1=xs_wg,
-        cross_section2=xs_wg_wide,
-        length=5,
-        width_type="parabolic",
-    )
-
-    sim = LumericalEmeSimulation(
-        taper,
-        run_mesh_convergence=False,
-        run_cell_convergence=False,
-        run_mode_convergence=False,
-        hide=False,
-    )
-
-    data = sim.get_length_sweep()
-    logger.info(f"{data}\nDone")
-
-
 class LumericalEmeSimulation:
     """
     Lumerical EME simulation plugin for running EME simulations on GDSFactory designs
@@ -340,7 +304,7 @@ class LumericalEmeSimulation:
             s.switchtolayout()
             s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
             s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
-            # Get sparams and refine mesh
+            # Get sparams
             s.run()
             s.emepropagate()
             S = s.getresult("EME", "user s matrix")
@@ -348,6 +312,7 @@ class LumericalEmeSimulation:
             s21.append(abs(S[1, 0]) ** 2)
             mesh_cells_per_wavl.append(ss.mesh_cells_per_wavelength)
 
+            # Refine mesh
             ss.mesh_cells_per_wavelength += 1
 
             # Check whether convergence has been reached
@@ -996,7 +961,7 @@ class LumericalEmeSimulation:
 
     def get_neff_vs_position(self, group: int = 1) -> pd.DataFrame:
         """
-        Get effective index vs position along device
+        Get effective index vs position along device for a given cell group
 
         Parameters:
             group: Group of cells to consider. First group is 0.
@@ -1060,7 +1025,3 @@ class LumericalEmeSimulation:
         plt.legend(loc="upper left", bbox_to_anchor=(1.04, 1))
         plt.tight_layout()
         plt.savefig(str(self.dirpath / f"{self.component.name}_neff_vs_position.png"))
-
-
-if __name__ == "__main__":
-    main()
