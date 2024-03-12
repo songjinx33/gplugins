@@ -26,6 +26,8 @@ class ConvergenceSettingsLumericalFdtd(BaseModel):
 
     Parameters:
         port_field_intensity_threshold: E-field intensity at the edge of each port. Used to resize ports and FDTD region.
+                                        E-field intensity profile is normalized such that the highest E-field intensity
+                                        in the mode profile is 1. Units are (V/m)^2
         sparam_diff: Maximum difference in sparams after x passes sweeping a convergence parameter. Used to check for convergence.
     """
 
