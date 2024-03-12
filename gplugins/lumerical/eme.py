@@ -931,7 +931,7 @@ class LumericalEmeSimulation:
         self, input_mode: int, max_coupled_mode: int = None, group: int = 1
     ) -> None:
         """
-        Plot mode coupling coefficients from the input_mode to the max_coupled_mode.
+        Plot mode coupling coefficients from the input_mode to the max_coupled_mode vs. position.
         Mode numbers start from 1 (fundamental mode).
 
         Parameters:
