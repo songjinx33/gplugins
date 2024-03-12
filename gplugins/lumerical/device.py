@@ -19,7 +19,7 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalCharge,
 )
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
-
+from gplugins.lumerical.config import um
 try:
     import lumapi
 except ModuleNotFoundError as e:
@@ -241,7 +241,7 @@ class LumericalChargeSimulation:
         draw_geometry(session=s, gdspath=gdspath, process_file_path=process_file_path)
 
         # Add and configure simulation region
-        print()
+        self.set_simulation_region()
 
         # Add and configure solver
         print()
@@ -312,6 +312,31 @@ class LumericalChargeSimulation:
                 else:
                     s.select(f"materials::{name}")
                 s.addmaterialproperties("CT", material)
+
+    def set_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None):
+        """
+        Set simulation region geometry and boundaries
+
+        Parameters:
+            simulation_settings: CHARGE simulation settings
+        """
+        s = self.session
+        ss = simulation_settings or self.simulation_settings
+
+        s.select("simulation region")
+        s.set("dimension", ss.dimension)
+        s.set("x min boundary", ss.xmin_boundary)
+        s.set("x max boundary", ss.xmax_boundary)
+        s.set("y min boundary", ss.ymin_boundary)
+        s.set("y max boundary", ss.ymax_boundary)
+        s.set("z min boundary", ss.zmin_boundary)
+        s.set("z max boundary", ss.zmax_boundary)
+        s.set("x", ss.x * um)
+        s.set("y", ss.y * um)
+        s.set("z", ss.z * um)
+        s.set("x span", ss.xspan * um)
+        s.set("y span", ss.yspan * um)
+        s.set("z span", ss.zspan * um)
 
 
 if __name__ == "__main__":
