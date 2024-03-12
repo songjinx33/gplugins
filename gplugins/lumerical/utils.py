@@ -16,7 +16,8 @@ def layerstack_to_lbr(
     material_map: dict[str, str],
     layerstack: LayerStack | None = None,
     dirpath: PathType | None = "",
-) -> None:
+    use_pdk_material_names: bool = False,
+) -> Path:
     """
     Generate an XML file representing a Lumerical Layer Builder process file based on provided material map.
 
@@ -24,6 +25,9 @@ def layerstack_to_lbr(
         material_map: A dictionary mapping materials used in the layer stack to Lumerical materials.
         layerstack: Layer stack that has info on layer names, layer numbers, thicknesses, etc.
         dirpath: Directory to save process file (process.lbr)
+        use_pdk_material_names: Use PDK material names in the pattern material and background material fields.
+                                This is mainly used for DEVICE simulations where several materials are grouped together
+                                in one material to describe electrical, thermal, and optical properties.
 
     Returns:
         Process file path
@@ -38,7 +42,7 @@ def layerstack_to_lbr(
     layer_builder = Element("layer_builder")
 
     process_name = SubElement(layer_builder, "process_name")
-    process_name.text = "process"
+    process_name.text = ""
 
     layers = SubElement(layer_builder, "layers")
     doping_layers = SubElement(layer_builder, "doping_layers")
@@ -47,7 +51,10 @@ def layerstack_to_lbr(
             process = "Grow"
         elif layer_info["layer_type"] == "background":
             process = "Background"
-        elif layer_info["layer_type"] == "doping":
+        elif (
+            layer_info["layer_type"] == "doping"
+            or layer_info["layer_type"] == "implant"
+        ):
             process = "Implant"
         else:
             logger.warning(
@@ -84,10 +91,17 @@ def layerstack_to_lbr(
             if process == "Grow":
                 layer.set(
                     "pattern_material",
-                    f'{material_map.get(layer_info["material"], "")}',
+                    f'{material_map.get(layer_info["material"], "")}'
+                    if not use_pdk_material_names
+                    else layer_info["material"],
                 )
             elif process == "Background":
-                layer.set("material", f'{material_map.get(layer_info["material"], "")}')
+                layer.set(
+                    "material",
+                    f'{material_map.get(layer_info["material"], "")}'
+                    if not use_pdk_material_names
+                    else layer_info["material"],
+                )
 
         if (process == "Implant" or process == "Background") and ENABLE_DOPING:
             ### Set doping layers
@@ -138,7 +152,7 @@ def layerstack_to_lbr(
         layer_builder.remove(doping_layers)
 
     # Prettify XML
-    rough_string = ET.tostring(layer_builder, "utf-8")
+    rough_string = ET.tostring(layer_builder, "utf-8", short_empty_elements=False)
     reparsed = minidom.parseString(rough_string)
     xml_str = reparsed.toprettyxml(indent="  ")
 

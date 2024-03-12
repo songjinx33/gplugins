@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -37,3 +39,34 @@ class ConvergenceSettingsLumericalFdtd(BaseModel):
 
 
 LUMERICAL_FDTD_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalFdtd()
+
+
+class ConvergenceSettingsLumericalCharge(BaseModel):
+    """
+    Lumerical CHARGE convergence settings
+
+    Parameters:
+        solver_type: Convergence solver type
+        dc_update_mode: Chooses mode for solving system of equations for electrostatic potential, charge density, and heat transport
+        global_iteration_limit: Maximum number of iterations in each solver before convergence has failed
+        gradient_mixing: Type of gradient mixing to aid in convergence
+        convergence_criteria: Criteria for determining simulation convergence
+        update_abs_tol: Absolute value used to determine convergence
+        update_rel_tol: Relative value used to determine convergence
+        residual_abs_tol: Absolute value of residuals used to determine convergence
+
+    """
+
+    solver_type: Literal["gummel", "newton"] = "gummel"
+    dc_update_mode: Literal[
+        "self consistent", "charge", "electrostatic"
+    ] = "self consistent"
+    global_iteration_limit: int = 40
+    gradient_mixing: Literal["disabled", "fast", "conservative"] = "disabled"
+    convergence_criteria: Literal["update", "residual", "any"] = "update"
+    update_abs_tol: float = 1e-4
+    update_rel_tol: float = 1e-6
+    residual_abs_tol: float = 1e-4
+
+
+LUMERICAL_CHARGE_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalCharge()

@@ -137,11 +137,22 @@ material_name_to_lumerical_default = {
     "si": "Si (Silicon) - Palik",
     "sio2": "SiO2 (Glass) - Palik",
     "sin": "Si3N4 (Silicon Nitride) - Phillip",
-    "tungsten": "W (tungsten) - Palik",
-    "cu": "Cu (copper) - CRC",
+    "tungsten": "W (Tungsten) - Palik",
+    "cu": "Cu (Copper) - CRC",
     "air": "Air",
     "TiN": "TiN - Palik",
-    "Aluminum": "Al (Aluminium) Palik",
+    "Aluminum": "Al (Aluminium) - Palik",
+}
+
+material_name_to_lumerical_ele_therm_default = {
+    "si": "Si (Silicon)",
+    "sio2": "SiO2 (Glass) - Sze",
+    "sin": "Si3N4 (Silicon nitride) - Sze",
+    "tungsten": "W (Tungsten) - Palik",
+    "cu": "Cu (Copper) - CRC",
+    "air": "Air",
+    "TiN": "TiN - Palik",
+    "Aluminum": "Al (Aluminium) - CRC",
 }
 
 
@@ -153,6 +164,7 @@ class SimulationSettingsLumericalEme(BaseModel):
         wavelength_start: Starting wavelength in wavelength range (um)
         wavelength_stop: Stopping wavelength in wavelength range (um)
         material_fit_tolerance: Material fit coefficient
+        material_name_to_lumerical: Material mapping between PDK materials and Lumerical materials
         group_cells: Number of cells in each group
         group_spans: Span size in each group (um)
         group_subcell_methods: Methods to analyze each cross section
@@ -227,6 +239,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         simulation_temperature: in kelvin (default = 300).
         frequency_dependent_profile: compute mode profiles for each wavelength.
         field_profile_samples: number of wavelengths to compute field profile.
+        material_name_to_lumerical: Material mapping between PDK materials and Lumerical materials
     """
 
     port_margin: float = 0.2
@@ -251,3 +264,93 @@ class SimulationSettingsLumericalFdtd(BaseModel):
 
 
 SIMULATION_SETTINGS_LUMERICAL_FDTD = SimulationSettingsLumericalFdtd()
+
+
+class SimulationSettingsLumericalCharge(BaseModel):
+    """Lumerical CHARGE simulation_settings.
+
+    Parameters:
+        solver_mode: CHARGE solver mode
+        simulation_temperature: Temperature in K
+        min_edge_length: Minimum edge length in m for a triangle or tetrahedron mesh
+        max_edge_length: Maximum edge length in m  for a triangle or tetrahedron mesh
+        max_refine_steps: Maximum number of vertices that can be added to the mesh at each mesh refinement stage
+        min_time_step: Minimum time step in seconds (only for transient simulations)
+        max_time_step: Maximum time step in seconds (only for transient simulations)
+        norm_length: Length of device in perpendicular direction of simulation region, usually used to calculate current
+                    from the current density. Units of microns.
+        vac_amplitude: Small signal AC voltage amplitude in V (only for small signal AC simulations)
+        frequency_spacing: Type of frequency sampling (only for small signal AC simulations)
+        start_frequency: Start frequency in Hz
+        stop_frequency: Stop frequency in Hz
+        num_frequency_pts: Number of frequency points to consider
+        dimension: Dimension and direction of simulation region
+        xmin_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        xmax_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        ymin_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        ymax_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        zmin_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        zmax_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
+                        defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
+        x: Center x coordinate of simulation region (um)
+        y: Center y coordinate of simulation region (um)
+        z: Center z coordinate of simulation region (um)
+        xspan: X span for simulation region (um)
+        yspan: Y span for simulation region (um)
+        zspan: Z span for simulation region (um)
+        material_fit_tolerance: Material fit coefficient
+        optical_material_name_to_lumerical: Optical material mapping between PDK materials and Lumerical materials
+        ele_therm_material_name_to_lumerical: Electrical and thermal material mapping between PDK materials and Lumerical materials
+
+    """
+
+    solver_mode: Literal["steady state", "transient", "ssac"] = "steady state"
+    simulation_temperature: float = 300
+    min_edge_length: float = 1e-3
+    max_edge_length: float = 1
+    max_refine_steps: int = 20e3
+    min_time_step: float = 1e-12
+    max_time_step: float = 1e-6
+    norm_length: float = 1.0
+    vac_amplitude: float = 1e-3
+    frequency_spacing: Literal["single", "linear", "log"] = "single"
+    start_frequency: float = 1e6
+    stop_frequency: float = 2e6
+    num_frequency_pts: int = 100
+    dimension: Literal[
+        "2D X-Normal", "2D Y-Normal", "2D Z-Normal", "3D"
+    ] = "2D Y-Normal"
+    xmin_boundary: Literal["closed", "open", "shell"] = "closed"
+    xmax_boundary: Literal["closed", "open", "shell"] = "closed"
+    ymin_boundary: Literal["closed", "open", "shell"] = "closed"
+    ymax_boundary: Literal["closed", "open", "shell"] = "closed"
+    zmin_boundary: Literal["closed", "open", "shell"] = "closed"
+    zmax_boundary: Literal["closed", "open", "shell"] = "closed"
+
+    x: float = 0
+    y: float = 0
+    z: float = 0
+    xspan: float = 5.0
+    yspan: float = 5.0
+    zspan: float = 1.0
+
+    material_fit_tolerance: float = 1e-3
+    optical_material_name_to_lumerical: dict[
+        str, str
+    ] = material_name_to_lumerical_default
+    ele_therm_material_name_to_lumerical: dict[
+        str, str
+    ] = material_name_to_lumerical_ele_therm_default
+
+    class Config:
+        """pydantic basemodel config."""
+
+        arbitrary_types_allowed = True
+
+
+LUMERICAL_CHARGE_SIMULATION_SETTINGS = SimulationSettingsLumericalCharge()
