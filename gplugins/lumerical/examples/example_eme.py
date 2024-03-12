@@ -1,6 +1,8 @@
-from gdsfactory.config import logger
-from gplugins.lumerical.eme import LumericalEmeSimulation
 import gdsfactory as gf
+from gdsfactory.config import logger
+
+from gplugins.lumerical.eme import LumericalEmeSimulation
+
 
 def example_eme():
     from functools import partial

@@ -1,11 +1,13 @@
-from gplugins.lumerical.simulation_settings import SIMULATION_SETTINGS_LUMERICAL_FDTD
-from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_SETTINGS
-from gplugins.lumerical.fdtd import LumericalFdtdSimulation
-
 from functools import partial
+
+import gdsfactory as gf
 from gdsfactory.components.taper_cross_section import taper_cross_section
 from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-import gdsfactory as gf
+
+from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_SETTINGS
+from gplugins.lumerical.fdtd import LumericalFdtdSimulation
+from gplugins.lumerical.simulation_settings import SIMULATION_SETTINGS_LUMERICAL_FDTD
+
 
 def example_fdtd():
     xs_wg = partial(
@@ -118,6 +120,7 @@ def example_fdtd():
     sp = sim.write_sparameters(overwrite=True)
     print(sp)
     print("Done")
+
 
 if __name__ == "__main__":
     example_fdtd()

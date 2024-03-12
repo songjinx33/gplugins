@@ -2,8 +2,8 @@ from gdsfactory.config import logger
 from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL, ENABLE_DOPING
-from gplugins.lumerical.utils import layerstack_to_lbr
 from gplugins.lumerical.simulation_settings import material_name_to_lumerical_default
+from gplugins.lumerical.utils import layerstack_to_lbr
 
 
 def test_layerstack_to_lbr():

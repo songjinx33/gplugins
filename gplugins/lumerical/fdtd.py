@@ -45,6 +45,7 @@ except OSError as e:
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
 
+
 class LumericalFdtdSimulation:
     """
     Lumerical FDTD simulation
@@ -1151,4 +1152,3 @@ class LumericalFdtdSimulation:
                     )
 
         return df
-

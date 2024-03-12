@@ -15,8 +15,8 @@ def test_fdtd_recipe():
     # Change the component and check whether recipe is still fresh
     comp = gf.components.taper()
     recipe.cell = comp
-    if recipe.is_fresh() == True:
-        assert False, (
+    if recipe.is_fresh():
+        raise AssertionError(
             f"Expected: False | Got: {recipe.is_fresh()}. Recipe should not be fresh after component is changed."
             + "The recipe should be re-eval'ed before it is fresh again."
         )
