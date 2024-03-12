@@ -101,7 +101,7 @@ class DesignRecipe:
         """
         success = True
         for recipe in self.dependencies:
-            if force_rerun_all or (not recipe.is_fresh):
+            if force_rerun_all or (not recipe.is_fresh()):
                 success = success and recipe.eval(force_rerun_all)
         return success
 
