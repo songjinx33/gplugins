@@ -170,7 +170,7 @@ class FdtdRecipe(DesignRecipe):
         """
         h = hashlib.sha1()
         int_hash = super().__hash__()
-        h.update(int_hash.to_bytes(int_hash.bit_length() + 7 // 8, byteorder="big"))
+        h.update(int_hash.to_bytes(int_hash.bit_length(), byteorder="big"))
         h.update(self.simulation_setup.model_dump_json().encode("utf-8"))
         h.update(self.convergence_setup.model_dump_json().encode("utf-8"))
         return int.from_bytes(h.digest(), "big")

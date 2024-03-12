@@ -40,7 +40,6 @@ class DesignRecipe:
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
     ):
-        dependencies = dependencies or []
         self.dependencies = dr.ConstituentRecipes(dependencies)
         self.cell = cell
         self.last_hash = -1
@@ -53,7 +52,7 @@ class DesignRecipe:
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
 
         Hashed items:
-        - component or cell
+        - component / cell geometry
         - layer stack
         """
         h = hashlib.sha1()
@@ -82,6 +81,9 @@ class DesignRecipe:
         (e.g. run the fdtd engine).
         Here we only evaluate dependencies,
         since the generic DesignRecipe has no underlying task.
+
+        Parameters:
+            force_rerun_all: Forces design recipes to be re-evaluated
         """
         success = self.eval_dependencies(force_rerun_all)
 
@@ -93,6 +95,9 @@ class DesignRecipe:
         Evaluate this `DesignRecipe`'s dependencies.
         Because `dependencies` are assumed to be independent,
         they can be evaluated in any order.
+
+        Parameters:
+            force_rerun_all: Forces design recipes to be re-evaluated
         """
         success = True
         for recipe in self.dependencies:
