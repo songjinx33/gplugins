@@ -1243,6 +1243,8 @@ class LumericalFdtdSimulation:
 
         # Save convergence results
         df = pd.DataFrame(sparams)
+        convergence_dir = self.dirpath / f"{self.component.name}_convergence"
+        convergence_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(
             str(
                 self.dirpath

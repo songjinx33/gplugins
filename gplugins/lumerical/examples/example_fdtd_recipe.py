@@ -1,9 +1,12 @@
 from pathlib import Path
+
 import gdsfactory as gf
-from gplugins.lumerical.simulation_settings import SimulationSettingsLumericalFdtd
+from gdsfactory.config import logger
+
 from gplugins.lumerical.convergence_settings import ConvergenceSettingsLumericalFdtd
 from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
-from gdsfactory.config import logger
+from gplugins.lumerical.simulation_settings import SimulationSettingsLumericalFdtd
+
 
 def example_run_fdtd_recipe():
     ### 0. DEFINE WHERE FILES ARE SAVED
@@ -93,6 +96,7 @@ def example_run_fdtd_recipe():
         logger.info("Completed FDTD recipe.")
     else:
         logger.info("Incomplete run of FDTD recipe.")
+
 
 if __name__ == "__main__":
     example_run_fdtd_recipe()

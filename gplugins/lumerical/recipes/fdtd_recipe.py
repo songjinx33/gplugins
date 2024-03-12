@@ -1,10 +1,8 @@
 import hashlib
 from pathlib import Path
 
-import gdsfactory as gf
 import pandas as pd
 from gdsfactory import Component
-from gdsfactory.config import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import PathType
 
@@ -109,4 +107,3 @@ class FdtdRecipe(DesignRecipe):
         self.sparameters = sim.write_sparameters(
             overwrite=True, delete_fsp_files=True, plot=True
         )
-
