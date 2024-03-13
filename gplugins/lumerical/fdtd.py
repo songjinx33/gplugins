@@ -1025,7 +1025,7 @@ class LumericalFdtdSimulation(Simulation):
 
     def update_mesh_convergence(
         self,
-        max_mesh_accuracy: int = 7,
+        max_mesh_accuracy: int = 5,
         wavl_points: int = 1,
         cpu_usage_percent: float = 1,
         min_cpus_per_sim: int = 8,

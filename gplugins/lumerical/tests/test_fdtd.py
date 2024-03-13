@@ -35,11 +35,11 @@ def test_lumerical_fdtd_simulation():
         taper,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-        run_port_convergence=False,
+        run_port_convergence=True,
         run_mesh_convergence=True,
-        run_field_intensity_convergence=False,
-        # hide=not DEBUG_LUMERICAL,
-        hide=False
+        run_field_intensity_convergence=True,
+        override_convergence=True,
+        hide=not DEBUG_LUMERICAL,
     )
 
     sim.write_sparameters(overwrite=True)
