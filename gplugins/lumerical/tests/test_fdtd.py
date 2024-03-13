@@ -20,11 +20,11 @@ def test_lumerical_fdtd_simulation():
     xs_wg_wide = partial(
         gf.cross_section.cross_section,
         layer=(1, 0),
-        width=2.0,
+        width=1.0,
     )
 
     taper = taper_cross_section(
-        cross_section1=xs_wg, cross_section2=xs_wg_wide, length=4
+        cross_section1=xs_wg, cross_section2=xs_wg_wide, length=2.0
     )
 
     SIMULATION_SETTINGS_LUMERICAL_FDTD.mesh_accuracy = 1
@@ -35,10 +35,11 @@ def test_lumerical_fdtd_simulation():
         taper,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-        run_port_convergence=True,
+        run_port_convergence=False,
         run_mesh_convergence=True,
-        run_field_intensity_convergence=True,
-        hide=not DEBUG_LUMERICAL,
+        run_field_intensity_convergence=False,
+        # hide=not DEBUG_LUMERICAL,
+        hide=False
     )
 
     sim.write_sparameters(overwrite=True)

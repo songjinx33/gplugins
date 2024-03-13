@@ -8,7 +8,7 @@ from gdsfactory.config import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import PathType
 
-from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator, RecipeResults
+from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalFdtd,
@@ -18,6 +18,7 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
+from gplugins.lumerical.utils import Results
 
 
 def example_run_fdtd_recipe():
@@ -129,7 +130,7 @@ class FdtdRecipe(DesignRecipe):
     )
 
     # Results
-    results: RecipeResults = RecipeResults(sparameters=pd.DataFrame())
+    results: Results = Results(sparameters=pd.DataFrame())
 
     def __init__(
         self,
