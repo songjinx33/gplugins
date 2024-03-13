@@ -614,8 +614,8 @@ class LumericalFdtdSimulation(Simulation):
 
             if (
                 run_field_intensity_convergence
-                or run_mesh_convergence
-                or run_port_convergence
+                and run_mesh_convergence
+                and run_port_convergence
             ):
                 # Save updated simulation setup and convergence setup
                 self.convergence_results.convergence_settings = (
