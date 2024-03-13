@@ -179,8 +179,12 @@ class LumericalEmeSimulation(Simulation):
                 # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
                 # run convergence testing by overriding convergence results. This covers any collisions in hashes.
                 if self.is_same_convergence_results():
-                    self.convergence_settings = self.convergence_results.convergence_settings
-                    self.simulation_settings = ss = self.convergence_results.simulation_settings
+                    self.convergence_settings = (
+                        self.convergence_results.convergence_settings
+                    )
+                    self.simulation_settings = (
+                        ss
+                    ) = self.convergence_results.simulation_settings
                     # Update hash since settings have changed
                     self.last_hash = hash(self)
                 else:
@@ -188,7 +192,6 @@ class LumericalEmeSimulation(Simulation):
             except (AttributeError, FileNotFoundError) as err:
                 logger.warning(f"{err}\nRun convergence.")
                 override_convergence = True
-
 
         # Set up EME simulation based on provided simulation settings
         if not session:

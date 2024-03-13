@@ -354,8 +354,12 @@ class Simulation:
         This is important for preventing hash collisions.
         """
         try:
-            return self.convergence_results.convergence_settings == self.convergence_settings and \
-            self.convergence_results.component_hash == self.component.hash_geometry() and \
-            self.convergence_results.layerstack == self.layerstack
+            return (
+                self.convergence_results.convergence_settings
+                == self.convergence_settings
+                and self.convergence_results.component_hash
+                == self.component.hash_geometry()
+                and self.convergence_results.layerstack == self.layerstack
+            )
         except AttributeError:
             return False
