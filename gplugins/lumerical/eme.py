@@ -174,10 +174,21 @@ class LumericalEmeSimulation(Simulation):
             and self.convergence_results.available()
             and not override_convergence
         ):
-            self.convergence_results = self.convergence_results.get_pickle()
-            self.convergence_settings = self.convergence_results.convergence_settings
-            self.simulation_settings = ss = self.convergence_results.simulation_settings
-            self.last_hash = hash(self)
+            try:
+                self.load_convergence_results()
+                # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
+                # run convergence testing by overriding convergence results. This covers any collisions in hashes.
+                if self.is_same_convergence_results():
+                    self.convergence_settings = self.convergence_results.convergence_settings
+                    self.simulation_settings = ss = self.convergence_results.simulation_settings
+                    # Update hash since settings have changed
+                    self.last_hash = hash(self)
+                else:
+                    override_convergence = True
+            except (AttributeError, FileNotFoundError) as err:
+                logger.warning(f"{err}\nRun convergence.")
+                override_convergence = True
+
 
         # Set up EME simulation based on provided simulation settings
         if not session:
@@ -357,15 +368,10 @@ class LumericalEmeSimulation(Simulation):
             if (run_overall_convergence and run_mode_convergence) or (
                 run_mesh_convergence and run_cell_convergence and run_mode_convergence
             ):
-                # Save updated simulation setup and convergence setup
-                self.convergence_results.convergence_settings = (
-                    self.convergence_settings
-                )
-                self.convergence_results.simulation_settings = self.simulation_settings
-
-                # Pickle convergence results
-                self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
-                self.convergence_results.save_pickle()
+                # Save setup and results for convergence
+                self.save_convergence_results()
+                if not hide:
+                    logger.info("Saved convergence results.")
 
         if not hide:
             plt.show()

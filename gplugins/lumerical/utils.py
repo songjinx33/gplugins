@@ -274,11 +274,12 @@ class Simulation:
         convergence_settings: pydantic.BaseModel | None = None,
         dirpath: Path | None = None,
     ):
+        self.dirpath = dirpath or Path(__file__).resolve().parent
         self.component = component
         self.layerstack = layerstack or get_layer_stack()
         self.simulation_settings = simulation_settings
         self.convergence_settings = convergence_settings
-        self.dirpath = dirpath or Path(__file__).resolve().parent
+
         self.last_hash = hash(self)
 
         # Create directory for convergence results
@@ -321,3 +322,40 @@ class Simulation:
         configuration being changed.
         """
         return hash(self) == self.last_hash
+
+    def load_convergence_results(self):
+        """
+        Loads convergence results from pickle file into class attribute
+        """
+        self.convergence_results = self.convergence_results.get_pickle()
+
+    def save_convergence_results(self):
+        """
+        Saves convergence_results to pickle file while adding setup information and resultant accurate simulation settings.
+        This includes:
+        - component hash
+        - layerstack
+        - convergence_settings
+        - simulation_settings
+
+        This is usually done after convergence testing is completed and simulation settings are accurate and should be
+        saved for future reference/recall.
+        """
+        self.convergence_results.convergence_settings = self.convergence_settings
+        self.convergence_results.simulation_settings = self.simulation_settings
+        self.convergence_results.component_hash = self.component.hash_geometry()
+        self.convergence_results.layerstack = self.layerstack
+        self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
+        self.convergence_results.save_pickle()
+
+    def is_same_convergence_results(self) -> bool:
+        """
+        Returns whether convergence results' setup are the same as the current setup for the simulation.
+        This is important for preventing hash collisions.
+        """
+        try:
+            return self.convergence_results.convergence_settings == self.convergence_settings and \
+            self.convergence_results.component_hash == self.component.hash_geometry() and \
+            self.convergence_results.layerstack == self.layerstack
+        except AttributeError:
+            return False
