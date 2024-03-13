@@ -192,9 +192,12 @@ class LumericalFdtdSimulation(Simulation):
         dirpath: Directory where simulation files are saved
         filepath_npz: S-parameter filepath (npz)
         filepath_fsp: FDTD simulation filepath (fsp)
-        mesh_convergence_data: Mesh convergence results
-        field_intensity_convergence_data: Convergence results after sweeping field intensity threshold at ports vs.
-                                            sparam variation.
+        convergence_results: Dynamic object used to store convergence results
+            simulation_settings: FDTD simulation settings
+            convergence_settings: FDTD convergence settings
+            mesh_convergence_data: Mesh convergence results
+            field_intensity_convergence_data: Convergence results after sweeping field intensity threshold at ports vs.
+                                                sparam variation.
 
     """
 
