@@ -1,3 +1,5 @@
+import hashlib
+import pickle
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.dom import minidom
@@ -5,16 +7,14 @@ from xml.etree.ElementTree import Element, SubElement
 
 import lumapi
 import pydantic
-
+from gdsfactory.component import Component
 from gdsfactory.config import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 from gdsfactory.typings import PathType
-from gdsfactory.component import Component
 
 from gplugins.lumerical.config import ENABLE_DOPING, um
-import hashlib
-import pickle
+
 
 def layerstack_to_lbr(
     material_map: dict[str, str],
@@ -206,11 +206,11 @@ class Results:
         Parameters:
             dirpath: Directory to store pickle file
         """
-        if dirpath == None:
-            with open(str(self.dirpath / f'{self.prefix}_results.pkl'), 'wb') as f:
+        if dirpath is None:
+            with open(str(self.dirpath / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
         else:
-            with open(str(dirpath / f'{self.prefix}_results.pkl'), 'wb') as f:
+            with open(str(dirpath / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
 
     def get_pickle(self, dirpath: Path | None = None) -> object:
@@ -225,11 +225,11 @@ class Results:
         """
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
-        if dirpath == None:
-            with open(str(self.dirpath / f'{self.prefix}_results.pkl'), 'rb') as f:
+        if dirpath is None:
+            with open(str(self.dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
                 results = pickle.load(f)
         else:
-            with open(str(dirpath / f'{self.prefix}_results.pkl'), 'rb') as f:
+            with open(str(dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
                 results = pickle.load(f)
 
         return results
@@ -246,11 +246,12 @@ class Results:
         """
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
-        if dirpath == None:
-            results_file = self.dirpath / f'{self.prefix}_results.pkl'
+        if dirpath is None:
+            results_file = self.dirpath / f"{self.prefix}_results.pkl"
         else:
-            results_file = dirpath / f'{self.prefix}_results.pkl'
+            results_file = dirpath / f"{self.prefix}_results.pkl"
         return results_file.is_file()
+
 
 class Simulation:
     """
@@ -265,11 +266,14 @@ class Simulation:
     # A dynamic object used to store convergence results
     convergence_results: Results
 
-    def __init__(self, component: Component,
-                 layerstack: LayerStack | None = None,
-                 simulation_settings: pydantic.BaseModel | None = None,
-                 convergence_settings: pydantic.BaseModel | None = None,
-                 dirpath: Path | None = None):
+    def __init__(
+        self,
+        component: Component,
+        layerstack: LayerStack | None = None,
+        simulation_settings: pydantic.BaseModel | None = None,
+        convergence_settings: pydantic.BaseModel | None = None,
+        dirpath: Path | None = None,
+    ):
         self.component = component
         self.layerstack = layerstack or get_layer_stack()
         self.simulation_settings = simulation_settings
@@ -278,11 +282,14 @@ class Simulation:
         self.last_hash = hash(self)
 
         # Create directory for convergence results
-        self.convergence_dirpath = self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
+        self.convergence_dirpath = (
+            self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
+        )
 
         # Create attribute for convergence results
-        self.convergence_results = Results(prefix="convergence", dirpath=self.convergence_dirpath)
-
+        self.convergence_results = Results(
+            prefix="convergence", dirpath=self.convergence_dirpath
+        )
 
     def __hash__(self) -> int:
         """
@@ -314,7 +321,3 @@ class Simulation:
         configuration being changed.
         """
         return hash(self) == self.last_hash
-
-
-
-

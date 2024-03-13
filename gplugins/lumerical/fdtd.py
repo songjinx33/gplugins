@@ -29,7 +29,11 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr, Results, Simulation
+from gplugins.lumerical.utils import (
+    Simulation,
+    draw_geometry,
+    layerstack_to_lbr,
+)
 
 try:
     import lumapi
@@ -336,14 +340,20 @@ class LumericalFdtdSimulation(Simulation):
         self.simulation_settings = ss = SimulationSettingsLumericalFdtd(**sim_settings)
 
         # Initialize parent class
-        super().__init__(component=self.component,
-                         layerstack=self.layerstack,
-                         simulation_settings=self.simulation_settings,
-                         convergence_settings=self.convergence_settings,
-                         dirpath=self.dirpath)
+        super().__init__(
+            component=self.component,
+            layerstack=self.layerstack,
+            simulation_settings=self.simulation_settings,
+            convergence_settings=self.convergence_settings,
+            dirpath=self.dirpath,
+        )
 
         # If convergence data is already available, update simulation settings
-        if self.convergence_is_fresh() and self.convergence_results.available() and not override_convergence:
+        if (
+            self.convergence_is_fresh()
+            and self.convergence_results.available()
+            and not override_convergence
+        ):
             self.convergence_results = self.convergence_results.get_pickle()
             self.convergence_settings = self.convergence_results.convergence_settings
             self.simulation_settings = ss = self.convergence_results.simulation_settings
@@ -420,11 +430,14 @@ class LumericalFdtdSimulation(Simulation):
         self.filepath_fsp = filepath_fsp = filepath_dat.with_suffix(".fsp")
 
         # Update simulation settings with additional info then to file
-        sim_settings.update(dict(layer_stack=layer_stack.to_dict(),
-                                 simulation_settings=self.simulation_settings.model_dump(),
-                                 component=component.to_dict(),
-                                 version=__version__,
-                                 ))
+        sim_settings.update(
+            dict(
+                layer_stack=layer_stack.to_dict(),
+                simulation_settings=self.simulation_settings.model_dump(),
+                component=component.to_dict(),
+                version=__version__,
+            )
+        )
 
         filepath_sim_settings = filepath_dat.with_suffix(".yml")
         filepath_sim_settings.write_text(yaml.dump(sim_settings))
@@ -578,7 +591,11 @@ class LumericalFdtdSimulation(Simulation):
 
         # Run convergence testing if no convergence results are available or user wants to override convergence results
         # or if setup has changed
-        if not self.convergence_results.available() or override_convergence or not self.convergence_is_fresh():
+        if (
+            not self.convergence_results.available()
+            or override_convergence
+            or not self.convergence_is_fresh()
+        ):
             if run_field_intensity_convergence:
                 self.convergence_results.field_intensity_convergence_data = (
                     self.update_field_intensity_threshold(plot=not hide)
@@ -588,19 +605,24 @@ class LumericalFdtdSimulation(Simulation):
                 self.update_port_convergence(verbose=not hide)
 
             if run_mesh_convergence:
-                self.convergence_results.mesh_convergence_data = self.update_mesh_convergence(
-                    verbose=not hide, plot=not hide
+                self.convergence_results.mesh_convergence_data = (
+                    self.update_mesh_convergence(verbose=not hide, plot=not hide)
                 )
 
-            if run_field_intensity_convergence or run_mesh_convergence or run_port_convergence:
+            if (
+                run_field_intensity_convergence
+                or run_mesh_convergence
+                or run_port_convergence
+            ):
                 # Save updated simulation setup and convergence setup
-                self.convergence_results.convergence_settings = self.convergence_settings
+                self.convergence_results.convergence_settings = (
+                    self.convergence_settings
+                )
                 self.convergence_results.simulation_settings = self.simulation_settings
 
                 # Pickle convergence results
                 self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
                 self.convergence_results.save_pickle()
-
 
     def write_sparameters(
         self,
@@ -1277,7 +1299,9 @@ class LumericalFdtdSimulation(Simulation):
         p = self.dirpath / f"{self.component.name}_convergence"
         p.mkdir(parents=True, exist_ok=True)
         df = pd.DataFrame(sparams)
-        df.to_csv(str(p / f"{self.component.name}_fdtd_efield_intensity_convergence.csv"))
+        df.to_csv(
+            str(p / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
+        )
 
         # Restore simulation settings
         s.setnamed("FDTD", "mesh accuracy", orig_mesh_accuracy)

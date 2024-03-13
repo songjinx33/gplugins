@@ -6,9 +6,7 @@ from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
-from pathlib import Path
 
-import pickle
 import gplugins.design_recipe as dr
 
 
