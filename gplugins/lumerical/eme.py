@@ -29,7 +29,7 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr, Simulation
+from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
 
 def main():
@@ -170,9 +170,9 @@ class LumericalEmeSimulation(Simulation):
 
         # If convergence data is already available, update simulation settings
         if (
-                self.convergence_is_fresh()
-                and self.convergence_results.available()
-                and not override_convergence
+            self.convergence_is_fresh()
+            and self.convergence_results.available()
+            and not override_convergence
         ):
             self.convergence_results = self.convergence_results.get_pickle()
             self.convergence_settings = self.convergence_results.convergence_settings
@@ -322,33 +322,41 @@ class LumericalEmeSimulation(Simulation):
         # Run convergence testing if no convergence results are available or user wants to override convergence results
         # or if setup has changed
         if (
-                not self.convergence_results.available()
-                or override_convergence
-                or not self.convergence_is_fresh()
+            not self.convergence_results.available()
+            or override_convergence
+            or not self.convergence_is_fresh()
         ):
-
             if run_overall_convergence:
                 if not hide:
                     logger.info("Running overall convergence")
-                self.convergence_results.overall_convergence_data = self.update_overall_convergence(plot=not hide)
+                self.convergence_results.overall_convergence_data = (
+                    self.update_overall_convergence(plot=not hide)
+                )
             else:
                 if run_mesh_convergence:
                     if not hide:
                         logger.info("Running mesh convergence.")
-                    self.convergence_results.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
+                    self.convergence_results.mesh_convergence_data = (
+                        self.update_mesh_convergence(plot=not hide)
+                    )
 
                 if run_cell_convergence:
                     if not hide:
                         logger.info("Running cell convergence.")
-                    self.convergence_results.cell_convergence_data = self.update_cell_convergence(plot=not hide)
+                    self.convergence_results.cell_convergence_data = (
+                        self.update_cell_convergence(plot=not hide)
+                    )
 
             if run_mode_convergence:
                 if not hide:
                     logger.info("Running mode convergence.")
-                self.convergence_results.mode_convergence_data = self.update_mode_convergence(plot=not hide)
+                self.convergence_results.mode_convergence_data = (
+                    self.update_mode_convergence(plot=not hide)
+                )
 
-            if ((run_overall_convergence and run_mode_convergence) or
-                    (run_mesh_convergence and run_cell_convergence and run_mode_convergence)):
+            if (run_overall_convergence and run_mode_convergence) or (
+                run_mesh_convergence and run_cell_convergence and run_mode_convergence
+            ):
                 # Save updated simulation setup and convergence setup
                 self.convergence_results.convergence_settings = (
                     self.convergence_settings
@@ -358,7 +366,6 @@ class LumericalEmeSimulation(Simulation):
                 # Pickle convergence results
                 self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
                 self.convergence_results.save_pickle()
-
 
         if not hide:
             plt.show()
