@@ -84,6 +84,8 @@ class LumericalEmeSimulation(Simulation):
         convergence_results: Dynamic object used to store convergence results
             simulation_settings: EME simulation settings
             convergence_settings: EME convergence settings
+            layerstack: PDK layerstack
+            component_hash: Component geometry hash
             mesh_convergence_data: Mesh convergence results
             cell_convergence_data: Cell convergence results
             mode_convergence_data: Mode convergence results
