@@ -189,7 +189,8 @@ class LumericalFdtdSimulation(Simulation):
         session: Lumerical session
         simulation_settings: FDTD simulation settings
         convergence_settings: FDTD convergence settings
-        dirpath: Directory where simulation files are saved
+        dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
+                    be where simulation files are saved.
         filepath_npz: S-parameter filepath (npz)
         filepath_fsp: FDTD simulation filepath (fsp)
         convergence_results: Dynamic object used to store convergence results
@@ -247,8 +248,8 @@ class LumericalFdtdSimulation(Simulation):
             session: you can pass a session=lumapi.FDTD() or it will create one.
             simulation_settings: dataclass with all simulation_settings.
             convergence_settings: FDTD convergence settings
-            dirpath: Directory where simulation files and sparams (.npz) are saved
-                Defaults to active Pdk.sparameters_path.
+            dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
+                    be where simulation files are saved.
             hide: Hide simulation if True, else show GUI
             run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
             run_port_convergence: If True, run port convergence where ports are resized based on E-field intensity
@@ -439,7 +440,7 @@ class LumericalFdtdSimulation(Simulation):
         # Define filepaths
         self.filepath_npz = get_sparameters_path(
             component=component,
-            dirpath=dirpath,
+            dirpath=self.simulation_dirpath,
             layer_stack=layer_stack,
             **settings,
         )
@@ -481,7 +482,7 @@ class LumericalFdtdSimulation(Simulation):
 
         # Create Layer Builder object and insert geometry
         process_file_path = layerstack_to_lbr(
-            ss.material_name_to_lumerical, layer_stack, dirpath
+            ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath
         )
         draw_geometry(s, gdspath, process_file_path)
 
@@ -726,7 +727,7 @@ class LumericalFdtdSimulation(Simulation):
             plt.grid("on")
             plt.legend()
             plt.tight_layout()
-            plt.savefig(str(self.dirpath / f"{self.component.name}_s-parameters.png"))
+            plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_s-parameters.png"))
 
         return sparam_data
 
@@ -1063,6 +1064,7 @@ class LumericalFdtdSimulation(Simulation):
         wavl_points: int = 1,
         cpu_usage_percent: float = 1,
         min_cpus_per_sim: int = 8,
+        delete_fsp_files: bool = False,
         verbose: bool = False,
         plot: bool = False,
     ) -> pd.DataFrame:
@@ -1116,10 +1118,6 @@ class LumericalFdtdSimulation(Simulation):
                 f"Using {cpus_per_sim} cores per simulation with {capacity} simulations running simultaneously."
             )
 
-        # Create directory for convergence sims and results
-        p = self.dirpath / f"{self.component.name}_convergence"
-        p.mkdir(parents=True, exist_ok=True)
-
         # Create convergence sims
         mesh_accuracies = []
         convergence_sims = []
@@ -1129,12 +1127,12 @@ class LumericalFdtdSimulation(Simulation):
             s.set("mesh accuracy", mesh_accuracy)
             base_filename = f"{self.component.name}_mesh-accuracy-{mesh_accuracy}"
 
-            convergence_sims.append(str(p / f"{base_filename}.fsp"))
+            convergence_sims.append(str(self.simulation_dirpath / f"{base_filename}.fsp"))
             mesh_accuracies.append(mesh_accuracy)
 
             s.save(convergence_sims[-1])
             s.savesweep()
-            sparam_dir = p / f"{base_filename}_s-parametersweep"
+            sparam_dir = self.simulation_dirpath / f"{base_filename}_s-parametersweep"
             for f in list(sparam_dir.glob("*.fsp")):
                 sparam_sims.append(str(f))
 
@@ -1207,7 +1205,7 @@ class LumericalFdtdSimulation(Simulation):
             plt.xlabel("Mesh Accuracy")
             plt.grid("on")
             plt.tight_layout()
-            plt.savefig(str(p / f"{self.component.name}_fdtd_mesh_convergence.png"))
+            plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_fdtd_mesh_convergence.png"))
 
         # If not converged, set to maximum mesh accuracy
         if not converged:
@@ -1221,13 +1219,24 @@ class LumericalFdtdSimulation(Simulation):
                     f"Mesh convergence failed. Setting mesh accuracy to {max_mesh_accuracy}."
                 )
 
+        if delete_fsp_files:
+            # Delete generated simulation files
+            for f in convergence_sims:
+                sim_path = Path(f)
+                sim_path.unlink(missing_ok=True)
+            for f in sparam_sims:
+                sim_path = Path(f)
+                sim_path.unlink(missing_ok=True)
+                if sim_path.parent.is_dir():
+                    shutil.rmtree(sim_path.parent)
+
         # Restore original sim settings
         s.select("FDTD::ports")
         s.set("monitor frequency points", orig_wavl_points)
 
         convergence_data = pd.DataFrame(sparams)
         convergence_data.to_csv(
-            str(p / f"{self.component.name}_fdtd_mesh_convergence.csv")
+            str(self.simulation_dirpath / f"{self.component.name}_fdtd_mesh_convergence.csv")
         )
         return convergence_data
 
@@ -1236,6 +1245,7 @@ class LumericalFdtdSimulation(Simulation):
         port_modes: dict | None = None,
         mesh_accuracy: int = 4,
         wavl_points: int = 1,
+        delete_fsp_files: bool = False,
         plot: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1309,11 +1319,9 @@ class LumericalFdtdSimulation(Simulation):
         sparams["thresholds"] = thresholds
 
         # Save convergence results
-        p = self.dirpath / f"{self.component.name}_convergence"
-        p.mkdir(parents=True, exist_ok=True)
         df = pd.DataFrame(sparams)
         df.to_csv(
-            str(p / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
+            str(self.simulation_dirpath / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
         )
 
         # Restore simulation settings
@@ -1334,8 +1342,7 @@ class LumericalFdtdSimulation(Simulation):
                     plt.tight_layout()
                     plt.savefig(
                         str(
-                            self.dirpath
-                            / f"{self.component.name}_convergence"
+                            self.simulation_dirpath
                             / f"{self.component.name}_fdtd_efield_intensity_convergence_{k}.png"
                         )
                     )
