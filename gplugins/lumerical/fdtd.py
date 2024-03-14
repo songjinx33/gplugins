@@ -357,10 +357,24 @@ class LumericalFdtdSimulation(Simulation):
             and self.convergence_results.available()
             and not override_convergence
         ):
-            self.convergence_results = self.convergence_results.get_pickle()
-            self.convergence_settings = self.convergence_results.convergence_settings
-            self.simulation_settings = ss = self.convergence_results.simulation_settings
-            self.last_hash = hash(self)
+            try:
+                self.load_convergence_results()
+                # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
+                # run convergence testing by overriding convergence results. This covers any collisions in hashes.
+                if self.is_same_convergence_results():
+                    self.convergence_settings = (
+                        self.convergence_results.convergence_settings
+                    )
+                    self.simulation_settings = (
+                        ss
+                    ) = self.convergence_results.simulation_settings
+                    # Update hash since settings have changed
+                    self.last_hash = hash(self)
+                else:
+                    override_convergence = True
+            except (AttributeError, FileNotFoundError) as err:
+                logger.warning(f"{err}\nRun convergence.")
+                override_convergence = True
 
         # Get component with extended ports that go through simulation boundaries
         component_with_booleans = layer_stack.get_component_with_derived_layers(
@@ -617,15 +631,10 @@ class LumericalFdtdSimulation(Simulation):
                 and run_mesh_convergence
                 and run_port_convergence
             ):
-                # Save updated simulation setup and convergence setup
-                self.convergence_results.convergence_settings = (
-                    self.convergence_settings
-                )
-                self.convergence_results.simulation_settings = self.simulation_settings
-
-                # Pickle convergence results
-                self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
-                self.convergence_results.save_pickle()
+                # Save setup and results for convergence
+                self.save_convergence_results()
+                if not hide:
+                    logger.info("Saved convergence results.")
 
     def write_sparameters(
         self,
@@ -744,7 +753,7 @@ class LumericalFdtdSimulation(Simulation):
         port_modes = port_modes or {}
 
         s = self.session
-        threshold = self.convergence_settings.port_field_intensity_threshold
+        threshold = self.simulation_settings.port_field_intensity_threshold
 
         # Get number of ports
         s.groupscope("::model::FDTD::ports")
@@ -1247,6 +1256,7 @@ class LumericalFdtdSimulation(Simulation):
         """
         port_modes = port_modes or {}
         s = self.session
+        ss = self.simulation_settings
         cs = self.convergence_settings
 
         # Save original sim settings
@@ -1262,7 +1272,7 @@ class LumericalFdtdSimulation(Simulation):
         thresholds = []
         sparams = {}
         while not converged:
-            self.convergence_settings.port_field_intensity_threshold = (
+            ss.port_field_intensity_threshold = (
                 efield_intensity_threshold
             )
             thresholds.append(efield_intensity_threshold)
@@ -1289,7 +1299,7 @@ class LumericalFdtdSimulation(Simulation):
                     sparam_diff.append(max(abs(abs(v[-1]) ** 2 - abs(v[-3]) ** 2)))
                 if max(sparam_diff) < cs.sparam_diff:
                     converged = True
-                    self.convergence_settings.port_field_intensity_threshold = (
+                    ss.port_field_intensity_threshold = (
                         efield_intensity_threshold
                     )
                     break
