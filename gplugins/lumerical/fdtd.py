@@ -50,7 +50,7 @@ class LumericalFdtdSimulation:
     """
     Lumerical FDTD simulation
 
-    Set up FDTD simulation based on component geometry and simulation settings. Optionally, run convergence to ensure
+    Set up FDTD simulation based on component geometry and simulation settings. Optionally, run convergence sweeps to ensure
     simulations are accurate.
 
     Attributes:
@@ -99,7 +99,8 @@ class LumericalFdtdSimulation:
         - dirpath
         - layerStack
 
-        converts gdsfactory units (um) to Lumerical units (m)
+        converts gdsfactory units (um) to Lumerical units (m) by mulitplying by a unit conversion constant called "um"
+        found in gplugins/lumerical/config.py
 
         Disclaimer: This function tries to create a generalized FDTD simulation to extract Sparameters.
         It is hard to make a function that will fit all your possible simulation settings.
