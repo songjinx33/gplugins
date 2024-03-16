@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel
+from gdsfactory.cross_section import LayerSpec
 
 simulation_settings_fdtd = [
     "allow grading in x",
@@ -272,6 +273,7 @@ class SimulationSettingsLumericalCharge(BaseModel):
     Parameters:
         solver_mode: CHARGE solver mode
         simulation_temperature: Temperature in K
+        temperature_dependence: Set this to have temperature dependent simulation (cross coupling)
         min_edge_length: Minimum edge length in m for a triangle or tetrahedron mesh
         max_edge_length: Maximum edge length in m  for a triangle or tetrahedron mesh
         max_refine_steps: Maximum number of vertices that can be added to the mesh at each mesh refinement stage
@@ -281,9 +283,13 @@ class SimulationSettingsLumericalCharge(BaseModel):
                     from the current density. Units of microns.
         vac_amplitude: Small signal AC voltage amplitude in V (only for small signal AC simulations)
         frequency_spacing: Type of frequency sampling (only for small signal AC simulations)
+        frequency: AC frequency to simulate
         start_frequency: Start frequency in Hz
         stop_frequency: Stop frequency in Hz
-        num_frequency_pts: Number of frequency points to consider
+        num_frequency_pts: Number of frequency points to consider. If frequency_spacing = linear, num_frequency_pts
+                            represents the number of points from start_frequency to stop_frequency.
+                            If frequency_spacing = log, num_frequency_pts represents the number of frequency points per
+                            decade.
         dimension: Dimension and direction of simulation region
         xmin_boundary: "closed" = simulation bounds defined by simulation region geometry. "open" = simulation bounds
                         defined by the structure shape. "shell" = similar to closed but adds additional shell layers.
@@ -306,11 +312,16 @@ class SimulationSettingsLumericalCharge(BaseModel):
         material_fit_tolerance: Material fit coefficient
         optical_material_name_to_lumerical: Optical material mapping between PDK materials and Lumerical materials
         ele_therm_material_name_to_lumerical: Electrical and thermal material mapping between PDK materials and Lumerical materials
+        metal_layer: Layer used for electrical boundary conditions.
+        dopant_layer: Layer used for surface recombination boundary condition. This layer interfaces with the metal_layer.
+        electron_velocity: Electron velocity for surface recombination boundary (cm/s)
+        hole_velocity: Hole velocity for surface recombination boundary (cm/s)
 
     """
 
     solver_mode: Literal["steady state", "transient", "ssac"] = "steady state"
     simulation_temperature: float = 300
+    temperature_dependence: Literal["isothermal", "non-isothermal", "coupled"] = "isothermal"
     min_edge_length: float = 1e-3
     max_edge_length: float = 1
     max_refine_steps: int = 20e3
@@ -319,11 +330,12 @@ class SimulationSettingsLumericalCharge(BaseModel):
     norm_length: float = 1.0
     vac_amplitude: float = 1e-3
     frequency_spacing: Literal["single", "linear", "log"] = "single"
+    frequency: float = 1e6
     start_frequency: float = 1e6
     stop_frequency: float = 2e6
     num_frequency_pts: int = 100
     dimension: Literal[
-        "2D X-Normal", "2D Y-Normal", "2D Z-Normal", "3D"
+        "2D X-Normal", "2D Y-Normal", "3D"
     ] = "2D Y-Normal"
     xmin_boundary: Literal["closed", "open", "shell"] = "closed"
     xmax_boundary: Literal["closed", "open", "shell"] = "closed"
@@ -346,6 +358,13 @@ class SimulationSettingsLumericalCharge(BaseModel):
     ele_therm_material_name_to_lumerical: dict[
         str, str
     ] = material_name_to_lumerical_ele_therm_default
+
+    metal_layer: LayerSpec = (40, 0)
+    dopant_layer: LayerSpec = (1, 0)
+
+    # Boundary conditions
+    electron_velocity: float = 1e7
+    hole_velocity: float = 1e7
 
     class Config:
         """pydantic basemodel config."""

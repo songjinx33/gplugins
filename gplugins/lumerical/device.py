@@ -19,7 +19,7 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalCharge,
 )
 from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
-from gplugins.lumerical.config import um
+from gplugins.lumerical.config import um, cm
 try:
     import lumapi
 except ModuleNotFoundError as e:
@@ -164,6 +164,8 @@ def main():
         hide=False,
     )
 
+    print("Done")
+
 
 class LumericalChargeSimulation:
     """
@@ -243,8 +245,11 @@ class LumericalChargeSimulation:
         # Add and configure simulation region
         self.set_simulation_region()
 
-        # Add and configure solver
-        print()
+        # Add boundary conditions
+        self.set_boundary_conditions()
+
+        #
+        print("done")
 
     def add_charge_materials(
         self,
@@ -313,7 +318,8 @@ class LumericalChargeSimulation:
                     s.select(f"materials::{name}")
                 s.addmaterialproperties("CT", material)
 
-    def set_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None):
+    def set_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None,
+                              convergence_settings: ConvergenceSettingsLumericalCharge | None = None):
         """
         Set simulation region geometry and boundaries
 
@@ -322,6 +328,10 @@ class LumericalChargeSimulation:
         """
         s = self.session
         ss = simulation_settings or self.simulation_settings
+        cs = convergence_settings or self.convergence_settings
+        self.simulation_settings = ss
+        self.convergence_settings = cs
+
 
         s.select("simulation region")
         s.set("dimension", ss.dimension)
@@ -337,6 +347,138 @@ class LumericalChargeSimulation:
         s.set("x span", ss.xspan * um)
         s.set("y span", ss.yspan * um)
         s.set("z span", ss.zspan * um)
+
+        s.addchargesolver()
+        # Set general settings
+        s.set("norm length", ss.norm_length)
+        s.set("solver mode", ss.solver_mode)
+        s.set("temperature dependence", ss.temperature_dependence)
+        s.set("simulation temperature", ss.simulation_temperature)
+        # Set mesh
+        s.set("min edge length", ss.min_edge_length)
+        s.set("max edge length", ss.max_edge_length)
+        s.set("max refine steps", ss.max_refine_steps)
+        # Set transient simulation settings
+        s.set("transient min time step", ss.min_time_step)
+        s.set("transient max time step", ss.max_time_step)
+        # Set AC simulation settings
+        s.set("perturbation amplitude", ss.vac_amplitude)
+        s.set("frequency spacing", ss.frequency_spacing)
+        # Set frequency partitioning settings for AC analysis
+        if ss.frequency_spacing == "single":
+            s.set("frequency", ss.frequency)
+        elif ss.frequency_spacing == "linear":
+            s.set("start frequency", ss.start_frequency)
+            s.set("stop frequency", ss.stop_frequency)
+            s.set("num frequency points", ss.num_frequency_pts)
+        elif ss.frequency_spacing == "log":
+            s.set("log start frequency", ss.start_frequency)
+            s.set("log stop frequency", ss.stop_frequency)
+            s.set("num frequency points per dec", ss.num_frequency_pts)
+
+        # Set convergence settings
+        s.set("solver type", cs.solver_type)
+        s.set("dc update mode", cs.dc_update_mode)
+        s.set("global iteration limit", cs.global_iteration_limit)
+        s.set("gradient mixing", cs.gradient_mixing)
+        s.set("convergence criteria", cs.convergence_criteria)
+        s.set("update abs tol", cs.update_abs_tol)
+        s.set("update rel tol", cs.update_rel_tol)
+        s.set("residual abs tol", cs.residual_abs_tol)
+
+    def set_boundary_conditions(self):
+        ss = self.simulation_settings
+        s = self.session
+        c = self.component
+
+        # To set the boundary conditions, we need to know the location of the metal contacts
+        # This is given by the metal_layer in simulation settings
+
+        # But, this will only give a list of polygons and coordinates
+        # We will also need the simulation region orientation and location to narrow down where the contacts are
+
+        # Get metal layer polygons. Each polygon is a metal boundary condition if it is inside the simulation region.
+        layer_spec = self.layerstack.layers[ss.metal_layer].layer if isinstance(ss.metal_layer, str) else ss.metal_layer
+        polygons = c.get_polygons(by_spec=layer_spec)
+
+        # Get simulation region orientation and bounds
+        # Get list of coords that cross the simulation plane
+
+        zmin = self.layerstack.get_layer_to_zmin()[layer_spec]
+        thickness = self.layerstack.get_layer_to_thickness()[layer_spec]
+        z = np.mean([zmin, ss.z + ss.zspan / 2]) if zmin + thickness / 2 > ss.z + ss.zspan / 2 else zmin + thickness / 2
+        bound_coords = []
+        if ss.dimension == "2D X-Normal":
+            for i in range(0, len(polygons)):
+                poly_coords = polygons[i]
+                coords = []
+                for j in range(0, len(poly_coords)-1):
+                    # If x coord crosses the simulation plane, continue to check whether the points are in the
+                    # simulation region
+                    if (poly_coords[j, 0] <= ss.x <= poly_coords[j + 1,0] or \
+                       poly_coords[j, 0] >= ss.x >= poly_coords[j + 1, 0]):
+                        x = ss.x
+                        # Sort the x coords such that lower coord is first, needed for numpy's linear interpolation.
+                        xp = [poly_coords[j, 0], poly_coords[j + 1, 0]] if poly_coords[j, 0] < poly_coords[j + 1, 0] else \
+                            [poly_coords[j + 1, 0], poly_coords[j, 0]]
+                        yp = [poly_coords[j, 1], poly_coords[j + 1, 1]] if poly_coords[j, 0] < poly_coords[j + 1, 0] else \
+                            [poly_coords[j + 1, 1], poly_coords[j, 1]]
+                        y = np.interp(ss.x, xp, yp)
+
+                        # If y coord is in the simulation span, add coords
+                        if ss.y - ss.yspan / 2 < y < ss.y + ss.yspan / 2:
+                            coords.append(np.array([x, y]))
+                coords = np.array(coords)
+                bound_coords.append([ss.x * um, np.mean(coords[:,1]) * um, z * um])
+
+        elif ss.dimension == "2D Y-Normal":
+            for i in range(0, len(polygons)):
+                poly_coords = polygons[i]
+                coords = []
+                for j in range(0, len(poly_coords) - 1):
+                    # If y coord crosses the simulation plane, continue to check whether the points are in the
+                    # simulation region
+                    if (poly_coords[j, 1] <= ss.y <= poly_coords[j + 1, 1] or \
+                            poly_coords[j, 1] >= ss.y >= poly_coords[j + 1, 1]):
+                        y = ss.y
+                        # Sort the y coords such that lower coord is first, needed for numpy's linear interpolation.
+                        yp = [poly_coords[j, 1], poly_coords[j + 1, 1]] if poly_coords[j, 1] < poly_coords[
+                            j + 1, 1] else \
+                            [poly_coords[j + 1, 1], poly_coords[j, 1]]
+                        xp = [poly_coords[j, 0], poly_coords[j + 1, 0]] if poly_coords[j, 1] < poly_coords[
+                            j + 1, 1] else \
+                            [poly_coords[j + 1, 0], poly_coords[j, 0]]
+                        x = np.interp(ss.y, yp, xp)
+
+                        # If y coord is in the simulation span, add coords
+                        if ss.x - ss.xspan / 2 < x < ss.x + ss.xspan / 2:
+                            coords.append(np.array([x, y]))
+                coords = np.array(coords)
+                bound_coords.append([np.mean(coords[:, 0]) * um, ss.y * um, z * um])
+
+        # Create and set coordinates of boundaries
+        for coord in bound_coords:
+            s.addelectricalcontact()
+            s.set("surface type", "coordinates of domain")
+            s.eval(f'set("coordinates", {{{coord}}});')
+
+        s.addsurfacerecombinationbc()
+        s.set("electron velocity", ss.electron_velocity * cm)
+        s.set("hole velocity", ss.hole_velocity * cm)
+        s.set("surface type", "material:material")
+        s.set("material 1", self.layerstack.get_layer_to_material()[ss.metal_layer])
+        s.set("material 2", self.layerstack.get_layer_to_material()[ss.dopant_layer])
+        s.partitionvolume()
+
+
+
+
+
+
+        # Get orientation of simulation region
+        # This determines which axes to find the loca
+
+
 
 
 if __name__ == "__main__":
