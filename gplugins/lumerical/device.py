@@ -243,10 +243,10 @@ class LumericalChargeSimulation:
         draw_geometry(session=s, gdspath=gdspath, process_file_path=process_file_path)
 
         # Add and configure simulation region
-        self.set_simulation_region()
+        self.add_simulation_region()
 
         # Add boundary conditions
-        self.set_boundary_conditions()
+        self.add_boundary_conditions()
 
         #
         print("done")
@@ -280,6 +280,11 @@ class LumericalChargeSimulation:
         material_fit_tolerance = (
             material_fit_tolerance or self.simulation_settings.material_fit_tolerance
         )
+
+        # Remove any initial materials
+        s.groupscope("::model::materials")
+        s.deleteall()
+        s.groupscope("::model")
 
         s.addmodelmaterial()
         ele_therm_materials = s.addmaterialproperties("CT").split("\n")
@@ -318,7 +323,7 @@ class LumericalChargeSimulation:
                     s.select(f"materials::{name}")
                 s.addmaterialproperties("CT", material)
 
-    def set_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None,
+    def add_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None,
                               convergence_settings: ConvergenceSettingsLumericalCharge | None = None):
         """
         Set simulation region geometry and boundaries
@@ -347,6 +352,10 @@ class LumericalChargeSimulation:
         s.set("x span", ss.xspan * um)
         s.set("y span", ss.yspan * um)
         s.set("z span", ss.zspan * um)
+
+        # Delete existing solver to create new one
+        s.select("CHARGE")
+        s.delete()
 
         s.addchargesolver()
         # Set general settings
@@ -386,7 +395,7 @@ class LumericalChargeSimulation:
         s.set("update rel tol", cs.update_rel_tol)
         s.set("residual abs tol", cs.residual_abs_tol)
 
-    def set_boundary_conditions(self):
+    def add_boundary_conditions(self):
         ss = self.simulation_settings
         s = self.session
         c = self.component
@@ -456,11 +465,20 @@ class LumericalChargeSimulation:
                 coords = np.array(coords)
                 bound_coords.append([np.mean(coords[:, 0]) * um, ss.y * um, z * um])
 
+        # Delete all existing boundary conditions
+        s.groupscope("::model::CHARGE::boundary conditions")
+        s.deleteall()
+        s.groupscope("::model")
+
+        # Sort boundary coordinates to ensure we are naming these boundaries from left to right
+        bound_coords.sort()
+
         # Create and set coordinates of boundaries
-        for coord in bound_coords:
+        for i in range(0, len(bound_coords)):
             s.addelectricalcontact()
+            s.set("name", f"b{i}")
             s.set("surface type", "coordinates of domain")
-            s.eval(f'set("coordinates", {{{coord}}});')
+            s.eval(f'set("coordinates", {{{bound_coords[i]}}});')
 
         s.addsurfacerecombinationbc()
         s.set("electron velocity", ss.electron_velocity * cm)
@@ -470,13 +488,6 @@ class LumericalChargeSimulation:
         s.set("material 2", self.layerstack.get_layer_to_material()[ss.dopant_layer])
         s.partitionvolume()
 
-
-
-
-
-
-        # Get orientation of simulation region
-        # This determines which axes to find the loca
 
 
 
