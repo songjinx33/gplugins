@@ -277,8 +277,11 @@ class LumericalChargeSimulation(Simulation):
 
         self.add_charge_monitor()
 
-        # s.save()
-g
+        s.partitionvolume()
+
+
+        s.save(str(self.simulation_dirpath / f"{self.component.name}.ldev"))
+
 
     def add_charge_materials(
         self,
@@ -546,7 +549,7 @@ g
         s.set("surface type", "material:material")
         s.set("material 1", self.layerstack.get_layer_to_material()[ss.metal_layer])
         s.set("material 2", self.layerstack.get_layer_to_material()[ss.dopant_layer])
-        s.partitionvolume()
+
 
     def set_boundary_conditions(self, boundary_settings: dict[str, dict]):
         """
@@ -591,12 +594,12 @@ g
         ss = self.simulation_settings
 
         s.addchargemonitor()
-        s.set("x", ss.x)
-        s.set("y", ss.y)
-        s.set("z", ss.z)
-        s.set("x span", ss.xspan)
-        s.set("y span", ss.yspan)
-        s.set("z span", ss.zspan)
+        s.set("x", ss.x * um)
+        s.set("y", ss.y * um)
+        s.set("z", ss.z * um)
+        s.set("x span", ss.xspan * um)
+        s.set("y span", ss.yspan * um)
+        s.set("z span", ss.zspan * um)
         s.set("monitor type", ss.dimension)
         s.set("integrate total charge", True)
         s.set("save data", True)
