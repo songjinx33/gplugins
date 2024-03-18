@@ -6,7 +6,6 @@ import pandas as pd
 from gdsfactory import Component
 from gdsfactory.config import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
-from gdsfactory.typings import PathType
 
 from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
 from gplugins.lumerical.convergence_settings import (
@@ -23,7 +22,7 @@ from gplugins.lumerical.utils import Results
 
 def example_run_fdtd_recipe():
     ### 0. DEFINE WHERE FILES ARE SAVED
-    dirpath = Path(__file__).parent / "recipe_runs" / "fdtd_recipe"
+    dirpath = Path(__file__).parent / "recipe_runs"
     dirpath.mkdir(parents=True, exist_ok=True)
 
     ### 1. DEFINE DESIGN
@@ -40,13 +39,13 @@ def example_run_fdtd_recipe():
     xs_wg_wide = partial(
         gf.cross_section.cross_section,
         layer=(1, 0),
-        width=2.0,
+        width=0.8,
     )
 
     taper = taper_cross_section(
         cross_section1=xs_wg,
         cross_section2=xs_wg_wide,
-        length=3.0,
+        length=1.0,
         width_type="parabolic",
     )
 
@@ -89,10 +88,10 @@ def example_run_fdtd_recipe():
 
     ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
     fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-        mesh_accuracy=2, port_translation=1.0
+        mesh_accuracy=2, port_translation=0,
+        port_field_intensity_threshold=1e-5,
     )
-    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
-        port_field_intensity_threshold=1e-6, sparam_diff=0.01
+    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(sparam_diff=0.01
     )
 
     ### 4. CREATE AND RUN DESIGN RECIPE
@@ -101,6 +100,7 @@ def example_run_fdtd_recipe():
         layer_stack=layerstack_lumerical,
         convergence_setup=fdtd_convergence_setup,
         simulation_setup=fdtd_simulation_setup,
+        dirpath=dirpath,
     )
 
     success = recipe.eval(run_convergence=True)
@@ -116,23 +116,13 @@ class FdtdRecipe(DesignRecipe):
     FDTD recipe that extracts sparams
 
     Attributes:
-        simulation_setup: FDTD simulation setup
-        convergence_setup: FDTD convergence setup
-        dirpath: Directory to store files.
-        results: s-parameter results.
+        recipe_setup:
+            simulation_setup: FDTD simulation setup
+            convergence_setup: FDTD convergence setup
+        dirpath: Root directory where all recipes are run
+        recipe_dirpath: Recipe directory where results from recipe are stored
+        recipe_results: s-parameter results.
     """
-
-    # Setup
-    simulation_setup: SimulationSettingsLumericalFdtd | None = (
-        SIMULATION_SETTINGS_LUMERICAL_FDTD
-    )
-    convergence_setup: ConvergenceSettingsLumericalFdtd | None = (
-        LUMERICAL_FDTD_CONVERGENCE_SETTINGS
-    )
-
-    # Results
-    results: Results = Results(sparameters=pd.DataFrame())
-
     def __init__(
         self,
         component: Component | None = None,
@@ -141,7 +131,7 @@ class FdtdRecipe(DesignRecipe):
         | None = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_setup: ConvergenceSettingsLumericalFdtd
         | None = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-        dirpath: PathType | None = None,
+        dirpath: Path | None = None,
     ):
         """
         Set up FDTD recipe
@@ -154,30 +144,13 @@ class FdtdRecipe(DesignRecipe):
             dirpath: Directory to store files.
         """
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(cell=component, layer_stack=layer_stack)
-        self.dirpath = dirpath or Path(__file__).resolve().parent
-        self.simulation_setup = simulation_setup
-        self.convergence_setup = convergence_setup
-
-    def __hash__(self) -> int:
-        """
-        Returns a hash of all state and setup this DesignRecipe contains.
-        This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
-
-        Hashed items:
-        - design intent
-        - simulation setup
-        - convergence setup
-        """
-        h = hashlib.sha1()
-        int_hash = super().__hash__()
-        h.update(int_hash.to_bytes(int_hash.bit_length() + 7 // 8, byteorder="big"))
-        h.update(self.simulation_setup.model_dump_json().encode("utf-8"))
-        h.update(self.convergence_setup.model_dump_json().encode("utf-8"))
-        return int.from_bytes(h.digest(), "big")
+        super().__init__(cell=component, layer_stack=layer_stack, dirpath=dirpath)
+        # Add information to recipe setup. NOTE: This is used for hashing
+        self.recipe_setup.simulation_setup = simulation_setup
+        self.recipe_setup.convergence_setup = convergence_setup
 
     @eval_decorator
-    def eval(self, run_convergence: bool = True):
+    def eval(self, run_convergence: bool = True) -> bool:
         """
         Run FDTD recipe to extract sparams
 
@@ -187,12 +160,15 @@ class FdtdRecipe(DesignRecipe):
 
         Parameters:
             run_convergence: Run convergence if True
+
+        Returns:
+            success: True if recipe completed properly
         """
         sim = LumericalFdtdSimulation(
             component=self.cell,
-            layerstack=self.layer_stack,
-            simulation_settings=self.simulation_setup,
-            convergence_settings=self.convergence_setup,
+            layerstack=self.recipe_setup.layer_stack,
+            simulation_settings=self.recipe_setup.simulation_setup,
+            convergence_settings=self.recipe_setup.convergence_setup,
             dirpath=self.dirpath,
             hide=False,  # TODO: Make global var to decide when to show sims
             run_mesh_convergence=run_convergence,
@@ -200,9 +176,12 @@ class FdtdRecipe(DesignRecipe):
             run_field_intensity_convergence=run_convergence,
         )
 
-        self.results.sparameters = sim.write_sparameters(
+        self.recipe_results.sparameters = sim.write_sparameters(
             overwrite=True, delete_fsp_files=False, plot=True
         )
+
+        success = True
+        return success
 
 
 if __name__ == "__main__":
