@@ -185,7 +185,28 @@ def main():
         boundary_settings=boundary_settings,
         hide=False,
     )
-
+    boundary_settings = {
+        "anode":
+            {
+                "name": "N+",
+            },
+        "cathode":
+            {
+                "name": "P+",
+            }
+    }
+    sim.set_boundary_conditions(boundary_settings)
+    boundary_settings = {
+        "N":
+            {
+                "name": "P",
+            },
+        "P":
+            {
+                "name": "N",
+            }
+    }
+    sim.set_boundary_conditions(boundary_settings)
     print("Done")
 
 
@@ -585,8 +606,18 @@ class LumericalChargeSimulation(Simulation):
         for name, settings in boundary_settings.items():
             try:
                 s.select(f"::model::CHARGE::boundary conditions::{name}")
+
                 if settings.get("name", None):
-                    self.boundary_condition_settings[settings["name"]] = self.boundary_condition_settings.pop(name)
+                    if settings["name"] in self.boundary_condition_settings:
+                        raise KeyError(f"'{settings['name']}' found in existing boundary conditions. Cannot swap " +
+                                       f"'{name}' boundary name with '{settings['name']}' name.")
+
+                    if "+" in settings["name"] or "-" in settings["name"] or "_" in settings["name"]:
+                        orig_name = settings["name"]
+                        settings["name"] = settings["name"].replace("+", "").replace("-", "").replace("-", "")
+                        logger.warning(
+                            f"Boundary condition name changed from '{orig_name}' to '{settings['name']}'. Names cannot have +, -, or _ symbols.")
+                self.boundary_condition_settings[settings["name"]] = self.boundary_condition_settings.pop(name)
             except lumapi.LumApiError as err:
                 logger.warning(f"{err}\nCannot find {name} boundary, skipping settings for this boundary.")
                 continue
@@ -612,7 +643,7 @@ class LumericalChargeSimulation(Simulation):
         s.set("monitor type", ss.dimension)
         s.set("integrate total charge", True)
         s.set("save data", True)
-        s.set("filename", "charge.mat")
+        s.set("filename", str(self.simulation_dirpath / "charge.mat"))
 
 
 
