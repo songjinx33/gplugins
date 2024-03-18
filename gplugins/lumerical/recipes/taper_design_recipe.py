@@ -31,7 +31,7 @@ from gplugins.lumerical.simulation_settings import (
 
 def example_run_taper_design_recipe():
     ### 0. DEFINE WHERE FILES ARE SAVED
-    dirpath = Path(__file__).parent / "recipe_runs" / "taper_design_recipe"
+    dirpath = Path(__file__).parent / "recipe_runs"
     dirpath.mkdir(parents=True, exist_ok=True)
 
     ### 1. DEFINE DESIGN INTENT
@@ -94,10 +94,10 @@ def example_run_taper_design_recipe():
     eme_simulation_setup = SimulationSettingsLumericalEme()
 
     fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
-        port_field_intensity_threshold=1e-6, sparam_diff=0.01
+        sparam_diff=0.01
     )
     fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-        mesh_accuracy=2, port_translation=1.0
+        mesh_accuracy=2, port_translation=1.0, port_field_intensity_threshold=1e-6,
     )
 
     ### 4. CREATE AND RUN DESIGN RECIPE
@@ -186,17 +186,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         dirpath: Directory to save files
     """
 
-    # Design intent
-    design_intent: RoutingTaperDesignIntent | None = None
-
-    # Setup
-    simulation_setup: SimulationSettingsLumericalEme | None = (
-        LUMERICAL_EME_SIMULATION_SETTINGS
-    )
-    convergence_setup: ConvergenceSettingsLumericalEme | None = (
-        LUMERICAL_EME_CONVERGENCE_SETTINGS
-    )
-
     # Results
     component: Component | None = None  # Optimal taper component
     length_sweep: pd.DataFrame | None = None  # Length sweep results
@@ -240,31 +229,14 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             dirpath: Directory to save files
         """
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(cell=cell, layer_stack=layer_stack)
+        super().__init__(cell=cell, layer_stack=layer_stack, dirpath=dirpath)
         self.cross_section1 = cross_section1
         self.cross_section2 = cross_section2
-        self.dirpath = dirpath or Path(__file__).resolve().parent
-        self.design_intent = design_intent or RoutingTaperDesignIntent()
-        self.simulation_setup = simulation_setup
-        self.convergence_setup = convergence_setup
+        # Add information to recipe setup. NOTE: This is used for hashing
+        self.recipe_setup.simulation_setup = simulation_setup
+        self.recipe_setup.convergence_setup = convergence_setup
+        self.recipe_setup.design_intent = design_intent or RoutingTaperDesignIntent()
 
-    def __hash__(self) -> int:
-        """
-        Returns a hash of all state and setup this DesignRecipe contains.
-        This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
-
-        Hashed items:
-        - design intent
-        - simulation setup
-        - convergence setup
-        """
-        h = hashlib.sha1()
-        int_hash = super().__hash__()
-        h.update(int_hash.to_bytes(int_hash.bit_length() + 7 // 8, byteorder="big"))
-        h.update(self.simulation_setup.model_dump_json().encode("utf-8"))
-        h.update(self.convergence_setup.model_dump_json().encode("utf-8"))
-        h.update(self.design_intent.model_dump_json().encode("utf-8"))
-        return int.from_bytes(h.digest(), "big")
 
     @eval_decorator
     def eval(self, run_convergence: bool = True):
@@ -281,10 +253,9 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         Parameters:
             run_convergence: Run convergence if True
         """
-        self.last_hash = hash(self)
-        ss = self.simulation_setup
-        cs = self.convergence_setup
-        di = self.design_intent
+        ss = self.recipe_setup.simulation_setup
+        cs = self.recipe_setup.convergence_setup
+        di = self.recipe_setup.design_intent
 
         # Sweep geometry
         components = [
@@ -307,7 +278,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             try:
                 sim = LumericalEmeSimulation(
                     component=component,
-                    layerstack=self.layer_stack,
+                    layerstack=self.recipe_setup.layer_stack,
                     simulation_settings=ss,
                     convergence_settings=cs,
                     hide=False,  # TODO: Make global variable for switching debug modes
@@ -353,13 +324,21 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 reflection_coefficients.append(s11[-1])
 
         results = {
-            f"{components[i].name} ({components[i].settings.get('width_type', 'Shape Unknown')})": f"L: {optimal_lengths[i]} | T: {transmission_coefficients[i]} | R: {reflection_coefficients[i]}"
+            f"{simulated_components[i].name} ({simulated_components[i].settings.get('width_type', 'Shape Unknown')})": f"L: {optimal_lengths[i]} | T: {transmission_coefficients[i]} | R: {reflection_coefficients[i]}"
             for i in range(0, len(simulated_components))
         }
-        with open(str(self.dirpath / "optimal_lengths.txt"), "w") as f:
+        with open(str(self.recipe_dirpath / "optimal_lengths.txt"), "w") as f:
             f.write(f"{results}")
         logger.info(f"{results}")
-        self.components = simulated_components
+        self.components = [
+            self.cell(
+                cross_section1=self.cross_section1,
+                cross_section2=self.cross_section2,
+                length=optimal_lengths[i],  # um
+                width_type=simulated_components[i].settings.get('width_type', 'sine'),
+            )
+            for i in range(0, len(simulated_components))
+        ]
 
         # Get best component
         # Most optimal component is one with smallest length AND least reflections
@@ -389,6 +368,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         # Save results
         self.component = optimal_component
         self.length_sweep = opt_length_sweep_data
+
+        return True
 
 
 if __name__ == "__main__":

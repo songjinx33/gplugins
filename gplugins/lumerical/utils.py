@@ -296,14 +296,15 @@ class Simulation:
 
         self.last_hash = hash(self)
 
-        # Create directory for convergence results
-        self.convergence_dirpath = (
+        # Create directory for simulation files
+        self.simulation_dirpath = (
             self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
         )
+        self.simulation_dirpath.mkdir(parents=True, exist_ok=True)
 
         # Create attribute for convergence results
         self.convergence_results = Results(
-            prefix="convergence", dirpath=self.convergence_dirpath
+            prefix="convergence", dirpath=self.simulation_dirpath
         )
 
     def __hash__(self) -> int:
@@ -359,7 +360,7 @@ class Simulation:
         self.convergence_results.simulation_settings = self.simulation_settings
         self.convergence_results.component_hash = self.component.hash_geometry()
         self.convergence_results.layerstack = self.layerstack
-        self.convergence_dirpath.mkdir(parents=True, exist_ok=True)
+        self.simulation_dirpath.mkdir(parents=True, exist_ok=True)
         self.convergence_results.save_pickle()
 
     def is_same_convergence_results(self) -> bool:

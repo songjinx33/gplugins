@@ -8,7 +8,27 @@ from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
 
 import gplugins.design_recipe as dr
+from gplugins.lumerical.utils import Results
+from pathlib import Path
+import json
+from pydantic import BaseModel
 
+class Setup:
+    """
+    A dynamic class to store any setup information
+
+    This class allows designers to arbitrarily add setup information.
+    """
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def __eq__(self, other):
+        if not isinstance(other, Setup):
+            # Don't attempt to compare against unrelated types
+            return NotImplemented
+        return self.__dict__ == other.__dict__
 
 class DesignRecipe:
     """
@@ -19,40 +39,57 @@ class DesignRecipe:
     and optionally executes some tool-specific functionality.
     For example,an FdtdDesignRecipe might simulate its `component` in
     Lumerial FDTD to extract its s-parameters.
+
+
+    Attributes:
+        dependencies: This `DesignRecipe`s dependencies. These are assumed to be independent
+        last_hash: The hash of the system last time eval() was executed. This is used to determine whether the recipe's
+                    configuration has changed, meaning it must be re-eval'ed.
+        cell: GDSFactory layout cell or component. This is not necessarily the same `component` referred to in the
+                `dependencies` recipes.
+        layer_stack: PDK layerstack
+        dirpath: Root directory where recipes runs are stored
+        recipe_dirpath: Recipe directory where recipe results are stored. This is only created upon eval of the recipe.
+        run_convergence: Run convergence if True. Accurate simulations come from simulations that have run convergence.
+        override_recipe: Overrides recipe results if True. This runs the design recipe regardless if results are
+                        available and overwrites recipe results.
+        recipe_results: A dynamic object used to store recipe results and the setup to these results
     """
 
-    # This `DesignRecipe`s dependencies. These are assumed to be independent
     dependencies: dr.ConstituentRecipes
-
-    # the hash of the system last time eval() was executed
-    last_hash: int
-
-    # The component factory this DesignRecipe operates on. This is not necessarily
-    # the same `component` referred to in the `dependencies` recipes.
+    last_hash: int = -1
     cell: ComponentFactory | Component | None = None
-
-    # LayerStack for the process that the component is generated for
-    layer_stack: LayerStack
-
-    # Run convergence if True. Accurate simulations come from simulations that have run convergence.
+    layer_stack: LayerStack | None = None
+    dirpath: Path | None = None
+    recipe_dirpath: Path | None = None
     run_convergence: bool = True
+    override_recipe: bool = False
+    recipe_setup: Setup = Setup()
+    recipe_results: Results = Results()
 
     def __init__(
         self,
         cell: ComponentFactory | Component,
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
+        dirpath: Path | None = None
     ):
         dependencies = dependencies or []
         self.dependencies = dr.ConstituentRecipes(dependencies)
+        self.dirpath = dirpath or Path(__file__).resolve().parent
         self.cell = cell
-        self.last_hash = -1
-        self.layer_stack = layer_stack
+
+        # Initialize recipe setup
+        if isinstance(self.cell, Callable):
+            cell_hash = self.cell().hash_geometry()
+        elif type(self.cell) == Component:
+            cell_hash = self.cell.hash_geometry()
+        self.recipe_setup = Setup(cell_hash=cell_hash,
+                                  layer_stack=layer_stack)
 
     def __hash__(self) -> int:
         """
         Returns a hash of all state this DesignRecipe contains.
-        Subclasses should include functionality-specific state (e.g. fdtd settings) here.
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
 
         Hashed items:
@@ -60,12 +97,16 @@ class DesignRecipe:
         - layer stack
         """
         h = hashlib.sha1()
-        if self.cell is not None:
-            if isinstance(self.cell, Callable):
-                h.update(self.cell().hash_geometry(precision=1e-4).encode("utf-8"))
-            elif type(self.cell) == Component:
-                h.update(self.cell.hash_geometry(precision=1e-4).encode("utf-8"))
-        h.update(self.layer_stack.model_dump_json().encode("utf-8"))
+        for attr in self.recipe_setup.__dict__.values():
+            if isinstance(attr, int) or isinstance(attr, float) or isinstance(attr, complex) or isinstance(attr, str):
+                h.update(str(attr).encode("utf-8"))
+            elif isinstance(attr, dict) or isinstance(attr, list):
+                h.update(json.dumps(attr, sort_keys=True).encode("utf-8"))
+            elif isinstance(attr, BaseModel):
+                h.update(attr.model_dump_json().encode("utf-8"))
+            else:
+                h.update(str(attr).encode("utf-8"))
+        h.update(str(self.run_convergence).encode("utf-8"))
         return int.from_bytes(h.digest(), "big")
 
     def is_fresh(self) -> bool:
@@ -74,7 +115,7 @@ class DesignRecipe:
         This could be either caused by this DesignRecipe's
         configuration being changed, or that of one of its dependencies.
         """
-        return hash(self) == self.last_hash and all(
+        return self.__hash__() == self.last_hash and all(
             recipe.is_fresh() for recipe in self.dependencies
         )
 
@@ -99,9 +140,41 @@ class DesignRecipe:
         """
         success = True
         for recipe in self.dependencies:
-            if force_rerun_all or (not recipe.is_fresh):
+            if force_rerun_all or (not recipe.is_fresh()):
                 success = success and recipe.eval(force_rerun_all)
         return success
+
+    def load_recipe_results(self):
+        """
+        Loads recipe results from pickle file into class attribute
+        """
+        self.recipe_results = self.recipe_results.get_pickle()
+
+    def save_recipe_results(self):
+        """
+        Saves recipe_results to pickle file while adding setup information.
+        This includes:
+        - component hash
+        - layerstack
+        - convergence_settings
+        - simulation_settings
+
+        This is usually done after convergence testing is completed and simulation settings are accurate and should be
+        saved for future reference/recall.
+        """
+        self.recipe_results.recipe_setup = self.recipe_setup
+        self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
+        self.recipe_results.save_pickle()
+
+    def is_same_recipe_results(self) -> bool:
+        """
+        Returns whether recipe results' setup are the same as the current setup for the recipe.
+        This is important for preventing hash collisions.
+        """
+        try:
+            return self.recipe_results.recipe_setup == self.recipe_setup
+        except AttributeError:
+            return False
 
 
 def eval_decorator(func):
@@ -120,17 +193,34 @@ def eval_decorator(func):
         Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
         """
         self = args[0]
+        # Evaluate independent dependent recipes
+        success = self.eval_dependencies()
+
         if "run_convergence" in kwargs:
             self.run_convergence = kwargs["run_convergence"]
-        self.last_hash = hash(self)
-        # Check if results already available. Results must be stored in directory with the same hash.
+        self.last_hash = self.__hash__()
 
-        # Evaluate the design recipe
-        func(*args, **kwargs)
-        # Evaluate independent recipes
-        success = self.eval_dependencies()
-        # Update hash
-        self.last_hash = hash(self)
+        # Create directory for recipe results
+        self.recipe_dirpath = self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
+        self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
+        self.recipe_results.dirpath = self.recipe_dirpath
+        self.recipe_results.prefix = "recipe"
+
+        # Check if results already available. Results must be stored in directory with the same hash.
+        if self.recipe_results.available() and not self.override_recipe and self.is_fresh():
+            # Load results if available
+            self.load_recipe_results()
+
+            if not self.is_same_recipe_results():
+                # If the recipe setup is not the same as in the results, eval the design recipe
+                success = success and func(*args, **kwargs)
+                self.save_recipe_results()
+        else:
+            # If results not available, recipe config has changed, or user wants to override recipe results,
+            # eval the design recipe
+            success = success and func(*args, **kwargs)
+            self.save_recipe_results()
+
         # Return successful execution
         return success
 
