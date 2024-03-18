@@ -1,4 +1,3 @@
-import hashlib
 import typing
 from functools import partial
 from pathlib import Path
@@ -93,11 +92,11 @@ def example_run_taper_design_recipe():
     )
     eme_simulation_setup = SimulationSettingsLumericalEme()
 
-    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
-        sparam_diff=0.01
-    )
+    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(sparam_diff=0.01)
     fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-        mesh_accuracy=2, port_translation=1.0, port_field_intensity_threshold=1e-6,
+        mesh_accuracy=2,
+        port_translation=1.0,
+        port_field_intensity_threshold=1e-6,
     )
 
     ### 4. CREATE AND RUN DESIGN RECIPE
@@ -237,7 +236,6 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         self.recipe_setup.convergence_setup = convergence_setup
         self.recipe_setup.design_intent = design_intent or RoutingTaperDesignIntent()
 
-
     @eval_decorator
     def eval(self, run_convergence: bool = True):
         r"""
@@ -335,7 +333,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 cross_section1=self.cross_section1,
                 cross_section2=self.cross_section2,
                 length=optimal_lengths[i],  # um
-                width_type=simulated_components[i].settings.get('width_type', 'sine'),
+                width_type=simulated_components[i].settings.get("width_type", "sine"),
             )
             for i in range(0, len(simulated_components))
         ]

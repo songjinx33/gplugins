@@ -1,8 +1,9 @@
+from pathlib import Path
+
 import gdsfactory as gf
 from gdsfactory.generic_tech import LAYER
 
 from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
-from pathlib import Path
 
 
 def test_fdtd_recipe():

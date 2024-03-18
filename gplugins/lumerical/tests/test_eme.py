@@ -1,8 +1,9 @@
+from pathlib import Path
+
 import gdsfactory as gf
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL
 from gplugins.lumerical.eme import LumericalEmeSimulation
-from pathlib import Path
 
 
 def test_lumerical_eme_simulation_setup():
@@ -31,7 +32,7 @@ def test_lumerical_eme_simulation_setup():
         run_mode_convergence=True,
         run_overall_convergence=True,
         hide=not DEBUG_LUMERICAL,
-        dirpath=Path(__file__).resolve().parent / "test_runs"
+        dirpath=Path(__file__).resolve().parent / "test_runs",
     )
 
     sim.plot_length_sweep()

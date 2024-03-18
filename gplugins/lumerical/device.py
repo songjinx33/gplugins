@@ -10,6 +10,7 @@ from gdsfactory.config import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 
+from gplugins.lumerical.config import cm, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalCharge,
@@ -18,8 +19,8 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_CHARGE_SIMULATION_SETTINGS,
     SimulationSettingsLumericalCharge,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr, Simulation
-from gplugins.lumerical.config import um, cm
+from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
+
 try:
     import lumapi
 except ModuleNotFoundError as e:
@@ -156,25 +157,23 @@ def main():
     ### Set up simulation settings
     charge_settings = SimulationSettingsLumericalCharge(x=10, y=10)
     boundary_settings = {
-            "b0":
-                {
-                    "name": "anode",
-                    "bc mode": "steady state",
-                    "sweep type": "single",
-                    "force ohmic": True,
-                    "voltage": 0
-                },
-            "b1":
-                {
-                    "name": "cathode",
-                    "bc mode": "steady state",
-                    "sweep type": "range",
-                    "force ohmic": True,
-                    "range start": 0,
-                    "range stop": -10,
-                    "range num points": 21,
-                    "range backtracking": "disabled"
-                }
+        "b0": {
+            "name": "anode",
+            "bc mode": "steady state",
+            "sweep type": "single",
+            "force ohmic": True,
+            "voltage": 0,
+        },
+        "b1": {
+            "name": "cathode",
+            "bc mode": "steady state",
+            "sweep type": "range",
+            "force ohmic": True,
+            "range start": 0,
+            "range stop": -10,
+            "range num points": 21,
+            "range backtracking": "disabled",
+        },
     }
 
     sim = LumericalChargeSimulation(
@@ -186,25 +185,21 @@ def main():
         hide=False,
     )
     boundary_settings = {
-        "anode":
-            {
-                "name": "N+",
-            },
-        "cathode":
-            {
-                "name": "P+",
-            }
+        "anode": {
+            "name": "N+",
+        },
+        "cathode": {
+            "name": "P+",
+        },
     }
     sim.set_boundary_conditions(boundary_settings)
     boundary_settings = {
-        "N":
-            {
-                "name": "P",
-            },
-        "P":
-            {
-                "name": "N",
-            }
+        "N": {
+            "name": "P",
+        },
+        "P": {
+            "name": "N",
+        },
     }
     sim.set_boundary_conditions(boundary_settings)
     print("Done")
@@ -263,11 +258,13 @@ class LumericalChargeSimulation(Simulation):
         sim_settings.update(**settings)
         self.simulation_settings = SimulationSettingsLumericalCharge(**sim_settings)
 
-        super().__init__(component=self.component,
-                         layerstack=self.layerstack,
-                         simulation_settings=self.simulation_settings,
-                         convergence_settings=self.convergence_settings,
-                         dirpath=self.dirpath)
+        super().__init__(
+            component=self.component,
+            layerstack=self.layerstack,
+            simulation_settings=self.simulation_settings,
+            convergence_settings=self.convergence_settings,
+            dirpath=self.dirpath,
+        )
 
         ss = self.simulation_settings
         cs = self.convergence_settings
@@ -302,9 +299,7 @@ class LumericalChargeSimulation(Simulation):
 
         s.partitionvolume()
 
-
         s.save(str(self.simulation_dirpath / f"{self.component.name}.ldev"))
-
 
     def add_charge_materials(
         self,
@@ -378,8 +373,11 @@ class LumericalChargeSimulation(Simulation):
                     s.select(f"materials::{name}")
                 s.addmaterialproperties("CT", material)
 
-    def add_simulation_region(self, simulation_settings: SimulationSettingsLumericalCharge | None = None,
-                              convergence_settings: ConvergenceSettingsLumericalCharge | None = None):
+    def add_simulation_region(
+        self,
+        simulation_settings: SimulationSettingsLumericalCharge | None = None,
+        convergence_settings: ConvergenceSettingsLumericalCharge | None = None,
+    ):
         """
         Set simulation region geometry and boundaries
 
@@ -391,7 +389,6 @@ class LumericalChargeSimulation(Simulation):
         cs = convergence_settings or self.convergence_settings
         self.simulation_settings = ss
         self.convergence_settings = cs
-
 
         s.select("simulation region")
         s.set("dimension", ss.dimension)
@@ -491,7 +488,11 @@ class LumericalChargeSimulation(Simulation):
         # We will also need the simulation region orientation and location to narrow down where the contacts are
 
         # Get metal layer polygons. Each polygon is a metal boundary condition if it is inside the simulation region.
-        layer_spec = self.layerstack.layers[ss.metal_layer].layer if isinstance(ss.metal_layer, str) else ss.metal_layer
+        layer_spec = (
+            self.layerstack.layers[ss.metal_layer].layer
+            if isinstance(ss.metal_layer, str)
+            else ss.metal_layer
+        )
         polygons = c.get_polygons(by_spec=layer_spec)
 
         # Get simulation region orientation and bounds
@@ -499,30 +500,42 @@ class LumericalChargeSimulation(Simulation):
 
         zmin = self.layerstack.get_layer_to_zmin()[layer_spec]
         thickness = self.layerstack.get_layer_to_thickness()[layer_spec]
-        z = np.mean([zmin, ss.z + ss.zspan / 2]) if zmin + thickness / 2 > ss.z + ss.zspan / 2 else zmin + thickness / 2
+        z = (
+            np.mean([zmin, ss.z + ss.zspan / 2])
+            if zmin + thickness / 2 > ss.z + ss.zspan / 2
+            else zmin + thickness / 2
+        )
         bound_coords = []
         if ss.dimension == "2D X-Normal":
             for i in range(0, len(polygons)):
                 poly_coords = polygons[i]
                 coords = []
-                for j in range(0, len(poly_coords)-1):
+                for j in range(0, len(poly_coords) - 1):
                     # If x coord crosses the simulation plane, continue to check whether the points are in the
                     # simulation region
-                    if (poly_coords[j, 0] <= ss.x <= poly_coords[j + 1,0] or \
-                       poly_coords[j, 0] >= ss.x >= poly_coords[j + 1, 0]):
+                    if (
+                        poly_coords[j, 0] <= ss.x <= poly_coords[j + 1, 0]
+                        or poly_coords[j, 0] >= ss.x >= poly_coords[j + 1, 0]
+                    ):
                         x = ss.x
                         # Sort the x coords such that lower coord is first, needed for numpy's linear interpolation.
-                        xp = [poly_coords[j, 0], poly_coords[j + 1, 0]] if poly_coords[j, 0] < poly_coords[j + 1, 0] else \
-                            [poly_coords[j + 1, 0], poly_coords[j, 0]]
-                        yp = [poly_coords[j, 1], poly_coords[j + 1, 1]] if poly_coords[j, 0] < poly_coords[j + 1, 0] else \
-                            [poly_coords[j + 1, 1], poly_coords[j, 1]]
+                        xp = (
+                            [poly_coords[j, 0], poly_coords[j + 1, 0]]
+                            if poly_coords[j, 0] < poly_coords[j + 1, 0]
+                            else [poly_coords[j + 1, 0], poly_coords[j, 0]]
+                        )
+                        yp = (
+                            [poly_coords[j, 1], poly_coords[j + 1, 1]]
+                            if poly_coords[j, 0] < poly_coords[j + 1, 0]
+                            else [poly_coords[j + 1, 1], poly_coords[j, 1]]
+                        )
                         y = np.interp(ss.x, xp, yp)
 
                         # If y coord is in the simulation span, add coords
                         if ss.y - ss.yspan / 2 < y < ss.y + ss.yspan / 2:
                             coords.append(np.array([x, y]))
                 coords = np.array(coords)
-                bound_coords.append([ss.x * um, np.mean(coords[:,1]) * um, z * um])
+                bound_coords.append([ss.x * um, np.mean(coords[:, 1]) * um, z * um])
 
         elif ss.dimension == "2D Y-Normal":
             for i in range(0, len(polygons)):
@@ -531,16 +544,22 @@ class LumericalChargeSimulation(Simulation):
                 for j in range(0, len(poly_coords) - 1):
                     # If y coord crosses the simulation plane, continue to check whether the points are in the
                     # simulation region
-                    if (poly_coords[j, 1] <= ss.y <= poly_coords[j + 1, 1] or \
-                            poly_coords[j, 1] >= ss.y >= poly_coords[j + 1, 1]):
+                    if (
+                        poly_coords[j, 1] <= ss.y <= poly_coords[j + 1, 1]
+                        or poly_coords[j, 1] >= ss.y >= poly_coords[j + 1, 1]
+                    ):
                         y = ss.y
                         # Sort the y coords such that lower coord is first, needed for numpy's linear interpolation.
-                        yp = [poly_coords[j, 1], poly_coords[j + 1, 1]] if poly_coords[j, 1] < poly_coords[
-                            j + 1, 1] else \
-                            [poly_coords[j + 1, 1], poly_coords[j, 1]]
-                        xp = [poly_coords[j, 0], poly_coords[j + 1, 0]] if poly_coords[j, 1] < poly_coords[
-                            j + 1, 1] else \
-                            [poly_coords[j + 1, 0], poly_coords[j, 0]]
+                        yp = (
+                            [poly_coords[j, 1], poly_coords[j + 1, 1]]
+                            if poly_coords[j, 1] < poly_coords[j + 1, 1]
+                            else [poly_coords[j + 1, 1], poly_coords[j, 1]]
+                        )
+                        xp = (
+                            [poly_coords[j, 0], poly_coords[j + 1, 0]]
+                            if poly_coords[j, 1] < poly_coords[j + 1, 1]
+                            else [poly_coords[j + 1, 0], poly_coords[j, 0]]
+                        )
                         x = np.interp(ss.y, yp, xp)
 
                         # If y coord is in the simulation span, add coords
@@ -577,7 +596,6 @@ class LumericalChargeSimulation(Simulation):
         s.set("material 1", self.layerstack.get_layer_to_material()[ss.metal_layer])
         s.set("material 2", self.layerstack.get_layer_to_material()[ss.dopant_layer])
 
-
     def set_boundary_conditions(self, boundary_settings: dict[str, dict]):
         """
         Set electrical boundary condition settings
@@ -609,24 +627,42 @@ class LumericalChargeSimulation(Simulation):
 
                 if settings.get("name", None):
                     if settings["name"] in self.boundary_condition_settings:
-                        raise KeyError(f"'{settings['name']}' found in existing boundary conditions. Cannot swap " +
-                                       f"'{name}' boundary name with '{settings['name']}' name.")
+                        raise KeyError(
+                            f"'{settings['name']}' found in existing boundary conditions. Cannot swap "
+                            + f"'{name}' boundary name with '{settings['name']}' name."
+                        )
 
-                    if "+" in settings["name"] or "-" in settings["name"] or "_" in settings["name"]:
+                    if (
+                        "+" in settings["name"]
+                        or "-" in settings["name"]
+                        or "_" in settings["name"]
+                    ):
                         orig_name = settings["name"]
-                        settings["name"] = settings["name"].replace("+", "").replace("-", "").replace("-", "")
+                        settings["name"] = (
+                            settings["name"]
+                            .replace("+", "")
+                            .replace("-", "")
+                            .replace("-", "")
+                        )
                         logger.warning(
-                            f"Boundary condition name changed from '{orig_name}' to '{settings['name']}'. Names cannot have +, -, or _ symbols.")
-                self.boundary_condition_settings[settings["name"]] = self.boundary_condition_settings.pop(name)
+                            f"Boundary condition name changed from '{orig_name}' to '{settings['name']}'. Names cannot have +, -, or _ symbols."
+                        )
+                self.boundary_condition_settings[
+                    settings["name"]
+                ] = self.boundary_condition_settings.pop(name)
             except lumapi.LumApiError as err:
-                logger.warning(f"{err}\nCannot find {name} boundary, skipping settings for this boundary.")
+                logger.warning(
+                    f"{err}\nCannot find {name} boundary, skipping settings for this boundary."
+                )
                 continue
             for setting, value in settings.items():
                 try:
                     s.set(setting, value)
                     self.boundary_condition_settings[settings["name"]][setting] = value
                 except lumapi.LumApiError as err:
-                    logger.warning(f"{err}\nCannot find {setting} setting, skipping setting.")
+                    logger.warning(
+                        f"{err}\nCannot find {setting} setting, skipping setting."
+                    )
                     continue
 
     def add_charge_monitor(self):
@@ -644,8 +680,6 @@ class LumericalChargeSimulation(Simulation):
         s.set("integrate total charge", True)
         s.set("save data", True)
         s.set("filename", str(self.simulation_dirpath / "charge.mat"))
-
-
 
 
 if __name__ == "__main__":

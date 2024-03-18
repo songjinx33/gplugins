@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from pathlib import Path
 
 from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
+from pydantic import BaseModel
 
 import gplugins.design_recipe as dr
 from gplugins.lumerical.utils import Results
-from pathlib import Path
-import json
-from pydantic import BaseModel
+
 
 class Setup:
     """
@@ -29,6 +30,7 @@ class Setup:
             # Don't attempt to compare against unrelated types
             return NotImplemented
         return self.__dict__ == other.__dict__
+
 
 class DesignRecipe:
     """
@@ -72,7 +74,7 @@ class DesignRecipe:
         cell: ComponentFactory | Component,
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
-        dirpath: Path | None = None
+        dirpath: Path | None = None,
     ):
         dependencies = dependencies or []
         self.dependencies = dr.ConstituentRecipes(dependencies)
@@ -84,8 +86,7 @@ class DesignRecipe:
             cell_hash = self.cell().hash_geometry()
         elif type(self.cell) == Component:
             cell_hash = self.cell.hash_geometry()
-        self.recipe_setup = Setup(cell_hash=cell_hash,
-                                  layer_stack=layer_stack)
+        self.recipe_setup = Setup(cell_hash=cell_hash, layer_stack=layer_stack)
 
     def __hash__(self) -> int:
         """
@@ -98,7 +99,12 @@ class DesignRecipe:
         """
         h = hashlib.sha1()
         for attr in self.recipe_setup.__dict__.values():
-            if isinstance(attr, int) or isinstance(attr, float) or isinstance(attr, complex) or isinstance(attr, str):
+            if (
+                isinstance(attr, int)
+                or isinstance(attr, float)
+                or isinstance(attr, complex)
+                or isinstance(attr, str)
+            ):
                 h.update(str(attr).encode("utf-8"))
             elif isinstance(attr, dict) or isinstance(attr, list):
                 h.update(json.dumps(attr, sort_keys=True).encode("utf-8"))
@@ -201,13 +207,19 @@ def eval_decorator(func):
         self.last_hash = self.__hash__()
 
         # Create directory for recipe results
-        self.recipe_dirpath = self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
+        self.recipe_dirpath = (
+            self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
+        )
         self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
         self.recipe_results.dirpath = self.recipe_dirpath
         self.recipe_results.prefix = "recipe"
 
         # Check if results already available. Results must be stored in directory with the same hash.
-        if self.recipe_results.available() and not self.override_recipe and self.is_fresh():
+        if (
+            self.recipe_results.available()
+            and not self.override_recipe
+            and self.is_fresh()
+        ):
             # Load results if available
             self.load_recipe_results()
 

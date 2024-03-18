@@ -1,10 +1,12 @@
+from pathlib import Path
+
 import gdsfactory as gf
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL
 from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_SETTINGS
 from gplugins.lumerical.fdtd import LumericalFdtdSimulation
 from gplugins.lumerical.simulation_settings import SIMULATION_SETTINGS_LUMERICAL_FDTD
-from pathlib import Path
+
 
 def test_lumerical_fdtd_simulation():
     from functools import partial
@@ -39,7 +41,7 @@ def test_lumerical_fdtd_simulation():
         run_mesh_convergence=True,
         run_field_intensity_convergence=True,
         hide=DEBUG_LUMERICAL,
-        dirpath=Path(__file__).resolve().parent / "test_runs"
+        dirpath=Path(__file__).resolve().parent / "test_runs",
     )
 
     sim.update_mesh_convergence(delete_fsp_files=True)

@@ -727,7 +727,9 @@ class LumericalFdtdSimulation(Simulation):
             plt.grid("on")
             plt.legend()
             plt.tight_layout()
-            plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_s-parameters.png"))
+            plt.savefig(
+                str(self.simulation_dirpath / f"{self.component.name}_s-parameters.png")
+            )
 
         return sparam_data
 
@@ -1127,7 +1129,9 @@ class LumericalFdtdSimulation(Simulation):
             s.set("mesh accuracy", mesh_accuracy)
             base_filename = f"{self.component.name}_mesh-accuracy-{mesh_accuracy}"
 
-            convergence_sims.append(str(self.simulation_dirpath / f"{base_filename}.fsp"))
+            convergence_sims.append(
+                str(self.simulation_dirpath / f"{base_filename}.fsp")
+            )
             mesh_accuracies.append(mesh_accuracy)
 
             s.save(convergence_sims[-1])
@@ -1205,7 +1209,12 @@ class LumericalFdtdSimulation(Simulation):
             plt.xlabel("Mesh Accuracy")
             plt.grid("on")
             plt.tight_layout()
-            plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_fdtd_mesh_convergence.png"))
+            plt.savefig(
+                str(
+                    self.simulation_dirpath
+                    / f"{self.component.name}_fdtd_mesh_convergence.png"
+                )
+            )
 
         # If not converged, set to maximum mesh accuracy
         if not converged:
@@ -1236,7 +1245,10 @@ class LumericalFdtdSimulation(Simulation):
 
         convergence_data = pd.DataFrame(sparams)
         convergence_data.to_csv(
-            str(self.simulation_dirpath / f"{self.component.name}_fdtd_mesh_convergence.csv")
+            str(
+                self.simulation_dirpath
+                / f"{self.component.name}_fdtd_mesh_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -1282,9 +1294,7 @@ class LumericalFdtdSimulation(Simulation):
         thresholds = []
         sparams = {}
         while not converged:
-            ss.port_field_intensity_threshold = (
-                efield_intensity_threshold
-            )
+            ss.port_field_intensity_threshold = efield_intensity_threshold
             thresholds.append(efield_intensity_threshold)
             self.update_port_convergence(
                 port_modes=port_modes, mesh_accuracy=mesh_accuracy, verbose=plot
@@ -1309,9 +1319,7 @@ class LumericalFdtdSimulation(Simulation):
                     sparam_diff.append(max(abs(abs(v[-1]) ** 2 - abs(v[-3]) ** 2)))
                 if max(sparam_diff) < cs.sparam_diff:
                     converged = True
-                    ss.port_field_intensity_threshold = (
-                        efield_intensity_threshold
-                    )
+                    ss.port_field_intensity_threshold = efield_intensity_threshold
                     break
 
             efield_intensity_threshold = efield_intensity_threshold / 10
@@ -1321,7 +1329,10 @@ class LumericalFdtdSimulation(Simulation):
         # Save convergence results
         df = pd.DataFrame(sparams)
         df.to_csv(
-            str(self.simulation_dirpath / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
+            str(
+                self.simulation_dirpath
+                / f"{self.component.name}_fdtd_efield_intensity_convergence.csv"
+            )
         )
 
         # Restore simulation settings

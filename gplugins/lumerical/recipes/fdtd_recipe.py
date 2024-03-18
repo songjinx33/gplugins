@@ -1,8 +1,6 @@
-import hashlib
 from pathlib import Path
 
 import gdsfactory as gf
-import pandas as pd
 from gdsfactory import Component
 from gdsfactory.config import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
@@ -17,7 +15,6 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
-from gplugins.lumerical.utils import Results
 
 
 def example_run_fdtd_recipe():
@@ -88,11 +85,11 @@ def example_run_fdtd_recipe():
 
     ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
     fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-        mesh_accuracy=2, port_translation=0,
+        mesh_accuracy=2,
+        port_translation=0,
         port_field_intensity_threshold=1e-5,
     )
-    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(sparam_diff=0.01
-    )
+    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(sparam_diff=0.01)
 
     ### 4. CREATE AND RUN DESIGN RECIPE
     recipe = FdtdRecipe(
@@ -123,6 +120,7 @@ class FdtdRecipe(DesignRecipe):
         recipe_dirpath: Recipe directory where results from recipe are stored
         recipe_results: s-parameter results.
     """
+
     def __init__(
         self,
         component: Component | None = None,

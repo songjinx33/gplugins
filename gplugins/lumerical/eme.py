@@ -845,7 +845,9 @@ class LumericalEmeSimulation(Simulation):
         plt.ylabel("Magnitude")
         plt.title(f"Length Sweep | Wavelength={self.simulation_settings.wavelength}um")
         plt.tight_layout()
-        plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_length_sweep.png"))
+        plt.savefig(
+            str(self.simulation_dirpath / f"{self.component.name}_length_sweep.png")
+        )
 
         return fig
 
@@ -1116,7 +1118,9 @@ class LumericalEmeSimulation(Simulation):
         plt.ylabel("Effective Index")
         plt.legend(loc="upper left", bbox_to_anchor=(1.04, 1))
         plt.tight_layout()
-        plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_neff_vs_position.png"))
+        plt.savefig(
+            str(self.simulation_dirpath / f"{self.component.name}_neff_vs_position.png")
+        )
 
 
 if __name__ == "__main__":

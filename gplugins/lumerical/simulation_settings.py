@@ -1,7 +1,7 @@
 from typing import Literal
 
-from pydantic import BaseModel
 from gdsfactory.cross_section import LayerSpec
+from pydantic import BaseModel
 
 simulation_settings_fdtd = [
     "allow grading in x",
@@ -323,7 +323,9 @@ class SimulationSettingsLumericalCharge(BaseModel):
 
     solver_mode: Literal["steady state", "transient", "ssac"] = "steady state"
     simulation_temperature: float = 300
-    temperature_dependence: Literal["isothermal", "non-isothermal", "coupled"] = "isothermal"
+    temperature_dependence: Literal[
+        "isothermal", "non-isothermal", "coupled"
+    ] = "isothermal"
     min_edge_length: float = 1e-3
     max_edge_length: float = 1
     max_refine_steps: int = 20e3
@@ -336,9 +338,7 @@ class SimulationSettingsLumericalCharge(BaseModel):
     start_frequency: float = 1e6
     stop_frequency: float = 2e6
     num_frequency_pts: int = 100
-    dimension: Literal[
-        "2D X-Normal", "2D Y-Normal", "3D"
-    ] = "2D Y-Normal"
+    dimension: Literal["2D X-Normal", "2D Y-Normal", "3D"] = "2D Y-Normal"
     xmin_boundary: Literal["closed", "open", "shell"] = "closed"
     xmax_boundary: Literal["closed", "open", "shell"] = "closed"
     ymin_boundary: Literal["closed", "open", "shell"] = "closed"
