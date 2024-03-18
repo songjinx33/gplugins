@@ -153,7 +153,7 @@ material_name_to_lumerical_ele_therm_default = {
     "cu": "Cu (Copper) - CRC",
     "air": "Air",
     "TiN": "TiN - Palik",
-    "Aluminum": "Al (Aluminium) Palik",
+    "Aluminum": "Al (Aluminium) - Palik",
 }
 
 
