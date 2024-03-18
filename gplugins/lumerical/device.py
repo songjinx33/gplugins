@@ -283,10 +283,10 @@ class LumericalChargeSimulation(Simulation):
         process_file_path = layerstack_to_lbr(
             material_map=combined_material_map,
             layerstack=self.layerstack,
-            dirpath=self.dirpath,
+            dirpath=self.simulation_dirpath,
             use_pdk_material_names=True,
         )
-        gdspath = self.component.write_gds()
+        gdspath = self.component.write_gds(dirpath=self.simulation_dirpath)
         draw_geometry(session=s, gdspath=gdspath, process_file_path=process_file_path)
 
         # Add and configure simulation region
