@@ -153,7 +153,7 @@ material_name_to_lumerical_ele_therm_default = {
     "cu": "Cu (Copper) - CRC",
     "air": "Air",
     "TiN": "TiN - Palik",
-    "Aluminum": "Al (Aluminium) - CRC",
+    "Aluminum": "Al (Aluminium) Palik",
 }
 
 
@@ -165,7 +165,7 @@ class SimulationSettingsLumericalEme(BaseModel):
         wavelength_start: Starting wavelength in wavelength range (um)
         wavelength_stop: Stopping wavelength in wavelength range (um)
         material_fit_tolerance: Material fit coefficient
-        material_name_to_lumerical: Material mapping between PDK materials and Lumerical materials
+        material_name_to_lumerical: Mapping of PDK materials to Lumerical materials
         group_cells: Number of cells in each group
         group_spans: Span size in each group (um)
         group_subcell_methods: Methods to analyze each cross section
@@ -240,7 +240,8 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         simulation_temperature: in kelvin (default = 300).
         frequency_dependent_profile: compute mode profiles for each wavelength.
         field_profile_samples: number of wavelengths to compute field profile.
-        material_name_to_lumerical: Material mapping between PDK materials and Lumerical materials
+        material_name_to_lumerical: Mapping of PDK materials to Lumerical materials
+        port_field_intensity_threshold: E-field intensity at the edge of each port. Used to resize ports and FDTD region.
     """
 
     port_margin: float = 0.2
@@ -257,6 +258,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     field_profile_samples: int = 15
     distance_monitors_to_pml: float = 0.5
     material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
+    port_field_intensity_threshold: float = 1e-5
 
     class Config:
         """pydantic basemodel config."""

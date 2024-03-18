@@ -29,7 +29,7 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
 
 def main():
@@ -60,7 +60,9 @@ def main():
         taper,
         run_mesh_convergence=False,
         run_cell_convergence=False,
-        run_mode_convergence=False,
+        run_mode_convergence=True,
+        run_overall_convergence=True,
+        override_convergence=False,
         hide=False,
     )
 
@@ -68,7 +70,7 @@ def main():
     logger.info(f"{data}\nDone")
 
 
-class LumericalEmeSimulation:
+class LumericalEmeSimulation(Simulation):
     """
     Lumerical EME simulation
 
@@ -79,9 +81,15 @@ class LumericalEmeSimulation:
         simulation_settings: EME simulation settings
         convergence_settings: EME convergence settings
         dirpath: Directory where simulation files are saved
-        mesh_convergence_data: Mesh convergence results
-        cell_convergence_data: Cell convergence results
-        mode_convergence_data: Mode convergence results
+        convergence_results: Dynamic object used to store convergence results
+            simulation_settings: EME simulation settings
+            convergence_settings: EME convergence settings
+            layerstack: PDK layerstack
+            component_hash: Component geometry hash
+            mesh_convergence_data: Mesh convergence results
+            cell_convergence_data: Cell convergence results
+            mode_convergence_data: Mode convergence results
+            overall_convergence_data: Combination of mesh and cell convergence results
 
     """
 
@@ -98,6 +106,7 @@ class LumericalEmeSimulation:
         run_cell_convergence: bool = False,
         run_mode_convergence: bool = False,
         run_overall_convergence: bool = False,
+        override_convergence: bool = False,
         **settings,
     ):
         """
@@ -115,6 +124,7 @@ class LumericalEmeSimulation:
             run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
             run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
             run_overall_convergence: If True, run combination of mesh and cell convergence to quicken convergence.
+            override_convergence: Override convergence results and run convergence testing
         """
         # Set up variables
         dirpath = dirpath or Path(__file__).resolve().parent
@@ -150,6 +160,40 @@ class LumericalEmeSimulation:
         self.component = component
         self.layerstack = layerstack
         self.dirpath = dirpath
+
+        # Initialize parent class
+        super().__init__(
+            component=self.component,
+            layerstack=self.layerstack,
+            simulation_settings=self.simulation_settings,
+            convergence_settings=self.convergence_settings,
+            dirpath=self.dirpath,
+        )
+
+        # If convergence data is already available, update simulation settings
+        if (
+            self.convergence_is_fresh()
+            and self.convergence_results.available()
+            and not override_convergence
+        ):
+            try:
+                self.load_convergence_results()
+                # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
+                # run convergence testing by overriding convergence results. This covers any collisions in hashes.
+                if self.is_same_convergence_results():
+                    self.convergence_settings = (
+                        self.convergence_results.convergence_settings
+                    )
+                    self.simulation_settings = (
+                        ss
+                    ) = self.convergence_results.simulation_settings
+                    # Update hash since settings have changed
+                    self.last_hash = hash(self)
+                else:
+                    override_convergence = True
+            except (AttributeError, FileNotFoundError) as err:
+                logger.warning(f"{err}\nRun convergence.")
+                override_convergence = True
 
         # Set up EME simulation based on provided simulation settings
         if not session:
@@ -291,25 +335,48 @@ class LumericalEmeSimulation:
 
         s.save(str(dirpath / f"{component.name}.lms"))
 
-        if run_overall_convergence:
-            if not hide:
-                logger.info("Running overall convergence")
-            self.update_overall_convergence(plot=not hide)
-        else:
-            if run_mesh_convergence:
+        # Run convergence testing if no convergence results are available or user wants to override convergence results
+        # or if setup has changed
+        if (
+            not self.convergence_results.available()
+            or override_convergence
+            or not self.convergence_is_fresh()
+        ):
+            if run_overall_convergence:
                 if not hide:
-                    logger.info("Running mesh convergence.")
-                self.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
+                    logger.info("Running overall convergence")
+                self.convergence_results.overall_convergence_data = (
+                    self.update_overall_convergence(plot=not hide)
+                )
+            else:
+                if run_mesh_convergence:
+                    if not hide:
+                        logger.info("Running mesh convergence.")
+                    self.convergence_results.mesh_convergence_data = (
+                        self.update_mesh_convergence(plot=not hide)
+                    )
 
-            if run_cell_convergence:
+                if run_cell_convergence:
+                    if not hide:
+                        logger.info("Running cell convergence.")
+                    self.convergence_results.cell_convergence_data = (
+                        self.update_cell_convergence(plot=not hide)
+                    )
+
+            if run_mode_convergence:
                 if not hide:
-                    logger.info("Running cell convergence.")
-                self.cell_convergence_data = self.update_cell_convergence(plot=not hide)
+                    logger.info("Running mode convergence.")
+                self.convergence_results.mode_convergence_data = (
+                    self.update_mode_convergence(plot=not hide)
+                )
 
-        if run_mode_convergence:
-            if not hide:
-                logger.info("Running mode convergence.")
-            self.mode_convergence_data = self.update_mode_convergence(plot=not hide)
+            if (run_overall_convergence and run_mode_convergence) or (
+                run_mesh_convergence and run_cell_convergence and run_mode_convergence
+            ):
+                # Save setup and results for convergence
+                self.save_convergence_results()
+                if not hide:
+                    logger.info("Saved convergence results.")
 
         if not hide:
             plt.show()

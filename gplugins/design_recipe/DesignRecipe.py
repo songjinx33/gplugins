@@ -34,6 +34,9 @@ class DesignRecipe:
     # LayerStack for the process that the component is generated for
     layer_stack: LayerStack
 
+    # Run convergence if True. Accurate simulations come from simulations that have run convergence.
+    run_convergence: bool = True
+
     def __init__(
         self,
         cell: ComponentFactory | Component,
@@ -117,7 +120,11 @@ def eval_decorator(func):
         Evaluates design recipe and its dependencies then hashes the design recipe and returns successful execution
         """
         self = args[0]
+        if "run_convergence" in kwargs:
+            self.run_convergence = kwargs["run_convergence"]
         self.last_hash = hash(self)
+        # Check if results already available. Results must be stored in directory with the same hash.
+
         # Evaluate the design recipe
         func(*args, **kwargs)
         # Evaluate independent recipes

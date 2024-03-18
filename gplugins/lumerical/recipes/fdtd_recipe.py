@@ -18,6 +18,7 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
+from gplugins.lumerical.utils import Results
 
 
 def example_run_fdtd_recipe():
@@ -27,6 +28,7 @@ def example_run_fdtd_recipe():
 
     ### 1. DEFINE DESIGN
     from functools import partial
+
     from gdsfactory.components.taper_cross_section import taper_cross_section
 
     xs_wg = partial(
@@ -44,7 +46,7 @@ def example_run_fdtd_recipe():
     taper = taper_cross_section(
         cross_section1=xs_wg,
         cross_section2=xs_wg_wide,
-        length=5,
+        length=3.0,
         width_type="parabolic",
     )
 
@@ -101,7 +103,7 @@ def example_run_fdtd_recipe():
         simulation_setup=fdtd_simulation_setup,
     )
 
-    success = recipe.eval()
+    success = recipe.eval(run_convergence=True)
 
     if success:
         logger.info("Completed FDTD recipe.")
@@ -117,7 +119,7 @@ class FdtdRecipe(DesignRecipe):
         simulation_setup: FDTD simulation setup
         convergence_setup: FDTD convergence setup
         dirpath: Directory to store files.
-        sparameters: s-parameter results.
+        results: s-parameter results.
     """
 
     # Setup
@@ -129,7 +131,7 @@ class FdtdRecipe(DesignRecipe):
     )
 
     # Results
-    sparameters: pd.DataFrame | None = None
+    results: Results = Results(sparameters=pd.DataFrame())
 
     def __init__(
         self,
@@ -175,13 +177,16 @@ class FdtdRecipe(DesignRecipe):
         return int.from_bytes(h.digest(), "big")
 
     @eval_decorator
-    def eval(self):
+    def eval(self, run_convergence: bool = True):
         """
         Run FDTD recipe to extract sparams
 
         1. Performs port convergence by resizing ports to ensure E-field intensities decay to specified threshold
         2. Performs mesh convergence to ensure sparams converge to certain sparam_diff
         3. Extracts sparams after updating simulation with optimal simulation params
+
+        Parameters:
+            run_convergence: Run convergence if True
         """
         sim = LumericalFdtdSimulation(
             component=self.cell,
@@ -190,13 +195,13 @@ class FdtdRecipe(DesignRecipe):
             convergence_settings=self.convergence_setup,
             dirpath=self.dirpath,
             hide=False,  # TODO: Make global var to decide when to show sims
-            run_mesh_convergence=True,
-            run_port_convergence=True,
-            run_field_intensity_convergence=True,
+            run_mesh_convergence=run_convergence,
+            run_port_convergence=run_convergence,
+            run_field_intensity_convergence=run_convergence,
         )
 
-        self.sparameters = sim.write_sparameters(
-            overwrite=True, delete_fsp_files=True, plot=True
+        self.results.sparameters = sim.write_sparameters(
+            overwrite=True, delete_fsp_files=False, plot=True
         )
 
 

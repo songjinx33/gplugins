@@ -29,7 +29,11 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import (
+    Simulation,
+    draw_geometry,
+    layerstack_to_lbr,
+)
 
 try:
     import lumapi
@@ -164,7 +168,7 @@ def main():
         convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
         hide=False,
-        run_port_convergence=False,
+        run_port_convergence=True,
         run_mesh_convergence=False,
     )
 
@@ -173,7 +177,7 @@ def main():
     print("Done")
 
 
-class LumericalFdtdSimulation:
+class LumericalFdtdSimulation(Simulation):
     """
     Lumerical FDTD simulation
 
@@ -188,7 +192,12 @@ class LumericalFdtdSimulation:
         dirpath: Directory where simulation files are saved
         filepath_npz: S-parameter filepath (npz)
         filepath_fsp: FDTD simulation filepath (fsp)
-        mesh_convergence_data: Mesh convergence results
+        convergence_results: Dynamic object used to store convergence results
+            simulation_settings: FDTD simulation settings
+            convergence_settings: FDTD convergence settings
+            mesh_convergence_data: Mesh convergence results
+            field_intensity_convergence_data: Convergence results after sweeping field intensity threshold at ports vs.
+                                                sparam variation.
 
     """
 
@@ -204,6 +213,7 @@ class LumericalFdtdSimulation:
         run_mesh_convergence: bool = False,
         run_port_convergence: bool = False,
         run_field_intensity_convergence: bool = False,
+        override_convergence: bool = False,
         xmargin: float = 0,
         ymargin: float = 0,
         xmargin_left: float = 0,
@@ -245,6 +255,7 @@ class LumericalFdtdSimulation:
                 threshold. Edges of the port must decay to this threshold.
             run_field_intensity_convergence: If True, run sweep of E-field intensity threshold vs. sparam convergence.
                 Then, update the E-field intensity threshold to suit desired sparam convergence (sparam_diff).
+            override_convergence: Override convergence results and run convergence testing
             xmargin: left/right distance from component to PML.
             xmargin_left: left distance from component to PML.
             xmargin_right: right distance from component to PML.
@@ -307,17 +318,17 @@ class LumericalFdtdSimulation:
             dirpath = Path(dirpath)
         self.dirpath = dirpath = dirpath or Path(__file__).resolve().parent
 
-        self.convergence_settings = convergence_settings = (
+        self.convergence_settings = (
             convergence_settings or LUMERICAL_FDTD_CONVERGENCE_SETTINGS
         )
         self.component = component = gf.get_component(component)
-        sim_settings = dict(simulation_settings)
-
+        ports = component.get_ports_list(port_type="optical")
+        if not ports:
+            raise ValueError(f"{component.name!r} does not have any optical ports")
         self.layerstack = layer_stack = layerstack or get_layer_stack()
 
-        layer_to_thickness = layer_stack.get_layer_to_thickness()
-        layer_to_zmin = layer_stack.get_layer_to_zmin()
-
+        # Update simulation settings with any additional information
+        sim_settings = dict(simulation_settings)
         if hasattr(component.info, "simulation_settings"):
             sim_settings |= component.info.simulation_settings
             logger.info(
@@ -328,10 +339,44 @@ class LumericalFdtdSimulation:
                 raise ValueError(
                     f"Invalid setting {setting!r} not in ({list(sim_settings.keys())})"
                 )
-
         sim_settings.update(**settings)
         self.simulation_settings = ss = SimulationSettingsLumericalFdtd(**sim_settings)
 
+        # Initialize parent class
+        super().__init__(
+            component=self.component,
+            layerstack=self.layerstack,
+            simulation_settings=self.simulation_settings,
+            convergence_settings=self.convergence_settings,
+            dirpath=self.dirpath,
+        )
+
+        # If convergence data is already available, update simulation settings
+        if (
+            self.convergence_is_fresh()
+            and self.convergence_results.available()
+            and not override_convergence
+        ):
+            try:
+                self.load_convergence_results()
+                # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
+                # run convergence testing by overriding convergence results. This covers any collisions in hashes.
+                if self.is_same_convergence_results():
+                    self.convergence_settings = (
+                        self.convergence_results.convergence_settings
+                    )
+                    self.simulation_settings = (
+                        ss
+                    ) = self.convergence_results.simulation_settings
+                    # Update hash since settings have changed
+                    self.last_hash = hash(self)
+                else:
+                    override_convergence = True
+            except (AttributeError, FileNotFoundError) as err:
+                logger.warning(f"{err}\nRun convergence.")
+                override_convergence = True
+
+        # Get component with extended ports that go through simulation boundaries
         component_with_booleans = layer_stack.get_component_with_derived_layers(
             component
         )
@@ -348,21 +393,19 @@ class LumericalFdtdSimulation:
             component_with_padding, length=ss.distance_monitors_to_pml
         )
 
-        ports = component.get_ports_list(port_type="optical")
-        if not ports:
-            raise ValueError(f"{component.name!r} does not have any optical ports")
-
         component_extended_beyond_pml = gf.components.extension.extend_ports(
             component=component_extended, length=ss.port_extension
         )
         component_extended_beyond_pml.name = "top"
         gdspath = component_extended_beyond_pml.write_gds()
 
+        # Get initial simulation region bounds
         x_min = (component_extended.xmin - xmargin) * um
         x_max = (component_extended.xmax + xmargin) * um
         y_min = (component_extended.ymin - ymargin) * um
         y_max = (component_extended.ymax + ymargin) * um
 
+        layer_to_thickness = layer_stack.get_layer_to_thickness()
         layers_thickness = [
             layer_to_thickness[layer]
             for layer in component_with_booleans.get_layers()
@@ -373,6 +416,8 @@ class LumericalFdtdSimulation:
                 f"no layers for component {component.get_layers()}"
                 f"in layer stack {layer_stack}"
             )
+
+        layer_to_zmin = layer_stack.get_layer_to_zmin()
         layers_zmin = [
             layer_to_zmin[layer]
             for layer in component_with_booleans.get_layers()
@@ -387,18 +432,34 @@ class LumericalFdtdSimulation:
         x_span = x_max - x_min
         y_span = y_max - y_min
 
-        sim_settings.update(dict(layer_stack=layer_stack.to_dict()))
-
-        sim_settings = dict(
-            simulation_settings=sim_settings,
-            component=component.to_dict(),
-            version=__version__,
-        )
-
         logger.info(
             f"Simulation size = {x_span / um:.3f}, {y_span / um:.3f}, {z_span / um:.3f} um"
         )
 
+        # Define filepaths
+        self.filepath_npz = get_sparameters_path(
+            component=component,
+            dirpath=dirpath,
+            layer_stack=layer_stack,
+            **settings,
+        )
+        filepath_dat = self.filepath_npz.with_suffix(".dat")
+        self.filepath_fsp = filepath_fsp = filepath_dat.with_suffix(".fsp")
+
+        # Update simulation settings with additional info then to file
+        sim_settings.update(
+            dict(
+                layer_stack=layer_stack.to_dict(),
+                simulation_settings=self.simulation_settings.model_dump(),
+                component=component.to_dict(),
+                version=__version__,
+            )
+        )
+
+        filepath_sim_settings = filepath_dat.with_suffix(".yml")
+        filepath_sim_settings.write_text(yaml.dump(sim_settings))
+
+        # Create simulation
         self.session = s = session or lumapi.FDTD(hide=hide)
         s.newproject()
         s.selectall()
@@ -418,7 +479,7 @@ class LumericalFdtdSimulation:
             simulation_temperature=ss.simulation_temperature,
         )
 
-        ### Create Layer Builder object and insert geometry
+        # Create Layer Builder object and insert geometry
         process_file_path = layerstack_to_lbr(
             ss.material_name_to_lumerical, layer_stack, dirpath
         )
@@ -542,33 +603,38 @@ class LumericalFdtdSimulation:
         s.setsweep("s-parameter sweep", "Excite all ports", 1)
         s.setsweep("S sweep", "auto symmetry", True)
 
-        # Save simulation and settings
-        self.filepath_npz = get_sparameters_path(
-            component=component,
-            dirpath=dirpath,
-            layer_stack=layer_stack,
-            **settings,
-        )
-        filepath_dat = self.filepath_npz.with_suffix(".dat")
-        filepath_sim_settings = filepath_dat.with_suffix(".yml")
-        self.filepath_fsp = filepath_fsp = filepath_dat.with_suffix(".fsp")
-
+        # Save simulation
         s.save(str(filepath_fsp))
-        filepath_sim_settings.write_text(yaml.dump(sim_settings))
 
-        # Run convergence if specified
-        if run_field_intensity_convergence:
-            self.field_intensity_convergence_data = (
-                self.update_field_intensity_threshold(plot=not hide)
-            )
+        # Run convergence testing if no convergence results are available or user wants to override convergence results
+        # or if setup has changed
+        if (
+            not self.convergence_results.available()
+            or override_convergence
+            or not self.convergence_is_fresh()
+        ):
+            if run_field_intensity_convergence:
+                self.convergence_results.field_intensity_convergence_data = (
+                    self.update_field_intensity_threshold(plot=not hide)
+                )
 
-        if run_port_convergence:
-            self.update_port_convergence(verbose=not hide)
+            if run_port_convergence:
+                self.update_port_convergence(verbose=not hide)
 
-        if run_mesh_convergence:
-            self.mesh_convergence_data = self.update_mesh_convergence(
-                verbose=not hide, plot=not hide
-            )
+            if run_mesh_convergence:
+                self.convergence_results.mesh_convergence_data = (
+                    self.update_mesh_convergence(verbose=not hide, plot=not hide)
+                )
+
+            if (
+                run_field_intensity_convergence
+                and run_mesh_convergence
+                and run_port_convergence
+            ):
+                # Save setup and results for convergence
+                self.save_convergence_results()
+                if not hide:
+                    logger.info("Saved convergence results.")
 
     def write_sparameters(
         self,
@@ -687,7 +753,7 @@ class LumericalFdtdSimulation:
         port_modes = port_modes or {}
 
         s = self.session
-        threshold = self.convergence_settings.port_field_intensity_threshold
+        threshold = self.simulation_settings.port_field_intensity_threshold
 
         # Get number of ports
         s.groupscope("::model::FDTD::ports")
@@ -993,7 +1059,7 @@ class LumericalFdtdSimulation:
 
     def update_mesh_convergence(
         self,
-        max_mesh_accuracy: int = 7,
+        max_mesh_accuracy: int = 5,
         wavl_points: int = 1,
         cpu_usage_percent: float = 1,
         min_cpus_per_sim: int = 8,
@@ -1190,6 +1256,7 @@ class LumericalFdtdSimulation:
         """
         port_modes = port_modes or {}
         s = self.session
+        ss = self.simulation_settings
         cs = self.convergence_settings
 
         # Save original sim settings
@@ -1205,7 +1272,7 @@ class LumericalFdtdSimulation:
         thresholds = []
         sparams = {}
         while not converged:
-            self.convergence_settings.port_field_intensity_threshold = (
+            ss.port_field_intensity_threshold = (
                 efield_intensity_threshold
             )
             thresholds.append(efield_intensity_threshold)
@@ -1232,7 +1299,7 @@ class LumericalFdtdSimulation:
                     sparam_diff.append(max(abs(abs(v[-1]) ** 2 - abs(v[-3]) ** 2)))
                 if max(sparam_diff) < cs.sparam_diff:
                     converged = True
-                    self.convergence_settings.port_field_intensity_threshold = (
+                    ss.port_field_intensity_threshold = (
                         efield_intensity_threshold
                     )
                     break
@@ -1242,13 +1309,11 @@ class LumericalFdtdSimulation:
         sparams["thresholds"] = thresholds
 
         # Save convergence results
+        p = self.dirpath / f"{self.component.name}_convergence"
+        p.mkdir(parents=True, exist_ok=True)
         df = pd.DataFrame(sparams)
         df.to_csv(
-            str(
-                self.dirpath
-                / f"{self.component.name}_convergence"
-                / f"{self.component.name}_fdtd_efield_intensity_convergence.csv"
-            )
+            str(p / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
         )
 
         # Restore simulation settings

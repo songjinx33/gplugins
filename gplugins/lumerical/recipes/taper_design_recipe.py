@@ -113,11 +113,16 @@ def example_run_taper_design_recipe():
     )
     success = eme_recipe.eval()
 
-    fdtd_recipes = [FdtdRecipe(component=c,
-                               layer_stack=layerstack_lumerical,
-                               simulation_setup=fdtd_simulation_setup,
-                               convergence_setup=fdtd_convergence_setup,
-                               dirpath=dirpath) for c in eme_recipe.components]
+    fdtd_recipes = [
+        FdtdRecipe(
+            component=c,
+            layer_stack=layerstack_lumerical,
+            simulation_setup=fdtd_simulation_setup,
+            convergence_setup=fdtd_convergence_setup,
+            dirpath=dirpath,
+        )
+        for c in eme_recipe.components
+    ]
     for recipe in fdtd_recipes:
         success = success and recipe.eval()
 
@@ -262,7 +267,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         return int.from_bytes(h.digest(), "big")
 
     @eval_decorator
-    def eval(self):
+    def eval(self, run_convergence: bool = True):
         r"""
         Run taper design recipe.
 
@@ -272,6 +277,9 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 b) The component must have the lowest reflections
                 c) The component must be the shortest
         2. Run FDTD simulation to extract s-params for best component
+
+        Parameters:
+            run_convergence: Run convergence if True
         """
         self.last_hash = hash(self)
         ss = self.simulation_setup
@@ -303,10 +311,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                     simulation_settings=ss,
                     convergence_settings=cs,
                     hide=False,  # TODO: Make global variable for switching debug modes
-                    run_overall_convergence=True,
-                    run_mesh_convergence=False,
-                    run_mode_convergence=True,
-                    run_cell_convergence=False,
+                    run_overall_convergence=run_convergence,
+                    run_mode_convergence=run_convergence,
                     dirpath=self.dirpath,
                 )
                 sims.append(sim)
