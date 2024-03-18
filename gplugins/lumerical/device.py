@@ -158,6 +158,7 @@ def main():
     boundary_settings = {
             "b0":
                 {
+                    "name": "anode",
                     "bc mode": "steady state",
                     "sweep type": "single",
                     "force ohmic": True,
@@ -165,6 +166,7 @@ def main():
                 },
             "b1":
                 {
+                    "name": "cathode",
                     "bc mode": "steady state",
                     "sweep type": "range",
                     "force ohmic": True,
@@ -535,11 +537,15 @@ class LumericalChargeSimulation(Simulation):
         bound_coords.sort()
 
         # Create and set coordinates of boundaries
+        self.boundary_condition_settings = {}
         for i in range(0, len(bound_coords)):
             s.addelectricalcontact()
             s.set("name", f"b{i}")
             s.set("surface type", "coordinates of domain")
             s.eval(f'set("coordinates", {{{bound_coords[i]}}});')
+
+            # Add boundary condition settings
+            self.boundary_condition_settings[f"b{i}"] = {}
         if boundary_settings:
             self.set_boundary_conditions(boundary_settings=boundary_settings)
 
@@ -579,12 +585,15 @@ class LumericalChargeSimulation(Simulation):
         for name, settings in boundary_settings.items():
             try:
                 s.select(f"::model::CHARGE::boundary conditions::{name}")
+                if settings.get("name", None):
+                    self.boundary_condition_settings[settings["name"]] = self.boundary_condition_settings.pop(name)
             except lumapi.LumApiError as err:
                 logger.warning(f"{err}\nCannot find {name} boundary, skipping settings for this boundary.")
                 continue
             for setting, value in settings.items():
                 try:
                     s.set(setting, value)
+                    self.boundary_condition_settings[settings["name"]][setting] = value
                 except lumapi.LumApiError as err:
                     logger.warning(f"{err}\nCannot find {setting} setting, skipping setting.")
                     continue
