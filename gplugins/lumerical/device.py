@@ -18,7 +18,7 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_CHARGE_SIMULATION_SETTINGS,
     SimulationSettingsLumericalCharge,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr, Simulation
 from gplugins.lumerical.config import um, cm
 try:
     import lumapi
@@ -155,19 +155,39 @@ def main():
 
     ### Set up simulation settings
     charge_settings = SimulationSettingsLumericalCharge(x=10, y=10)
+    boundary_settings = {
+            "b0":
+                {
+                    "bc mode": "steady state",
+                    "sweep type": "single",
+                    "force ohmic": True,
+                    "voltage": 0
+                },
+            "b1":
+                {
+                    "bc mode": "steady state",
+                    "sweep type": "range",
+                    "force ohmic": True,
+                    "range start": 0,
+                    "range stop": -10,
+                    "range num points": 21,
+                    "range backtracking": "disabled"
+                }
+    }
 
     sim = LumericalChargeSimulation(
         component=c,
         layerstack=layer_stack,
         simulation_settings=charge_settings,
         convergence_settings=LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
+        boundary_settings=boundary_settings,
         hide=False,
     )
 
     print("Done")
 
 
-class LumericalChargeSimulation:
+class LumericalChargeSimulation(Simulation):
     """
     Lumerical CHARGE simulation
 
@@ -190,6 +210,7 @@ class LumericalChargeSimulation:
         session: lumapi.DEVICE | None = None,
         simulation_settings: SimulationSettingsLumericalCharge = LUMERICAL_CHARGE_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalCharge = LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
+        boundary_settings: dict[str, dict] | None = None,
         dirpath: PathType | None = "",
         hide: bool = True,
         **settings,
@@ -219,6 +240,12 @@ class LumericalChargeSimulation:
         sim_settings.update(**settings)
         self.simulation_settings = SimulationSettingsLumericalCharge(**sim_settings)
 
+        super().__init__(component=self.component,
+                         layerstack=self.layerstack,
+                         simulation_settings=self.simulation_settings,
+                         convergence_settings=self.convergence_settings,
+                         dirpath=self.dirpath)
+
         ss = self.simulation_settings
         cs = self.convergence_settings
 
@@ -246,10 +273,12 @@ class LumericalChargeSimulation:
         self.add_simulation_region()
 
         # Add boundary conditions
-        self.add_boundary_conditions()
+        self.add_boundary_conditions(boundary_settings=boundary_settings)
 
-        #
-        print("done")
+        self.add_charge_monitor()
+
+        # s.save()
+g
 
     def add_charge_materials(
         self,
@@ -395,7 +424,36 @@ class LumericalChargeSimulation:
         s.set("update rel tol", cs.update_rel_tol)
         s.set("residual abs tol", cs.residual_abs_tol)
 
-    def add_boundary_conditions(self):
+    def add_boundary_conditions(self, boundary_settings: dict[str, dict] | None = None):
+        """
+        Add electrical boundary conditions and surface recombination boundary conditions to simulation.
+
+        Electrical boundary conditions are created for polygons on the metal_layer (from simulation_settings) that are
+        inside the simulation region. Surface recombination boundary conditions are created for material:material
+        contact locations between the metal_layer and dopant_layer (from simulation_settings).
+
+        Boundaries are named b0, b1, b2, etc. and are labeled from left to right of the simulation region.
+
+        Parameters:
+            boundary_settings: Mapping between boundary condition name to its electrical boundary condition settings.
+                                Ex. {
+                                        "b0":
+                                        {
+                                            "bc mode": "steady state",
+                                            "sweep type": "single",
+                                            "voltage": 1.1,
+                                            "force ohmic": True
+                                        },
+                                        "b1":
+                                        {
+                                            "bc mode": "steady state",
+                                            "sweep type": "single",
+                                            "voltage": 0.1,
+                                            "force ohmic": True
+                                        }
+                                    }
+
+        """
         ss = self.simulation_settings
         s = self.session
         c = self.component
@@ -479,6 +537,8 @@ class LumericalChargeSimulation:
             s.set("name", f"b{i}")
             s.set("surface type", "coordinates of domain")
             s.eval(f'set("coordinates", {{{bound_coords[i]}}});')
+        if boundary_settings:
+            self.set_boundary_conditions(boundary_settings=boundary_settings)
 
         s.addsurfacerecombinationbc()
         s.set("electron velocity", ss.electron_velocity * cm)
@@ -488,6 +548,59 @@ class LumericalChargeSimulation:
         s.set("material 2", self.layerstack.get_layer_to_material()[ss.dopant_layer])
         s.partitionvolume()
 
+    def set_boundary_conditions(self, boundary_settings: dict[str, dict]):
+        """
+        Set electrical boundary condition settings
+
+        Parameters:
+            boundary_settings: Mapping between boundary condition name to its electrical boundary condition settings.
+                                Ex. {
+                                        "b0":
+                                        {
+                                            "bc mode": "steady state",
+                                            "sweep type": "single",
+                                            "voltage": 1.1,
+                                            "force ohmic": True
+                                        },
+                                        "b1":
+                                        {
+                                            "bc mode": "steady state",
+                                            "sweep type": "single",
+                                            "voltage": 0.1,
+                                            "force ohmic": True
+                                        }
+                                    }
+
+        """
+        s = self.session
+        for name, settings in boundary_settings.items():
+            try:
+                s.select(f"::model::CHARGE::boundary conditions::{name}")
+            except lumapi.LumApiError as err:
+                logger.warning(f"{err}\nCannot find {name} boundary, skipping settings for this boundary.")
+                continue
+            for setting, value in settings.items():
+                try:
+                    s.set(setting, value)
+                except lumapi.LumApiError as err:
+                    logger.warning(f"{err}\nCannot find {setting} setting, skipping setting.")
+                    continue
+
+    def add_charge_monitor(self):
+        s = self.session
+        ss = self.simulation_settings
+
+        s.addchargemonitor()
+        s.set("x", ss.x)
+        s.set("y", ss.y)
+        s.set("z", ss.z)
+        s.set("x span", ss.xspan)
+        s.set("y span", ss.yspan)
+        s.set("z span", ss.zspan)
+        s.set("monitor type", ss.dimension)
+        s.set("integrate total charge", True)
+        s.set("save data", True)
+        s.set("filename", "charge.mat")
 
 
 
