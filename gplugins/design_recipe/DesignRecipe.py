@@ -214,6 +214,13 @@ def eval_decorator(func):
         self.recipe_results.dirpath = self.recipe_dirpath
         self.recipe_results.prefix = "recipe"
 
+        # Add text file outlining dependencies for traceability
+        with open(str(self.recipe_dirpath / "recipe_dependencies.txt"), "w") as f:
+            dependencies = [f"{recipe.__class__.__name__}_{recipe.last_hash}" for recipe in self.dependencies]
+            dependencies = "\n".join(dependencies)
+            f.write(dependencies)
+
+
         # Check if results already available. Results must be stored in directory with the same hash.
         if (
             self.recipe_results.available()
