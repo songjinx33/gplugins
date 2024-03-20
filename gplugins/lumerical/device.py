@@ -647,6 +647,8 @@ class LumericalChargeSimulation(Simulation):
                         logger.warning(
                             f"Boundary condition name changed from '{orig_name}' to '{settings['name']}'. Names cannot have +, -, or _ symbols."
                         )
+
+                # Override the boundary condition name while retaining its settings
                 self.boundary_condition_settings[
                     settings["name"]
                 ] = self.boundary_condition_settings.pop(name)
