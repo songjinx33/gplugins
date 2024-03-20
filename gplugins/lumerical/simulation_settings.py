@@ -375,3 +375,87 @@ class SimulationSettingsLumericalCharge(BaseModel):
 
 
 LUMERICAL_CHARGE_SIMULATION_SETTINGS = SimulationSettingsLumericalCharge()
+
+class SimulationSettingsLumericalMode(BaseModel):
+    """
+    Lumerical MODE simulation settings.
+
+    Parameters:
+        injection_axis: Normal direction of simulation plane
+        mesh_cells_per_wavl: Number of mesh cells per wavelength
+        wavl: Center wavelength (um)
+        wavl_start: Start wavelength (um)
+        wavl_end: End wavelength (um)
+        wavl_pts: Number of wavelength points
+        num_modes: Number of modes
+        target_mode: Target mode number. Fundamental mode starts at 1.
+        x: Center x coordinate of simulation region (um)
+        y: Center y coordinate of simulation region (um)
+        z: Center z coordinate of simulation region (um)
+        xspan: X span for simulation region (um)
+        yspan: Y span for simulation region (um)
+        zspan: Z span for simulation region (um)
+        xmin_boundary: xmin boundary condition
+        xmax_boundary: xmax boundary condition
+        ymin_boundary: ymin boundary condition
+        ymax_boundary: ymax boundary condition
+        zmin_boundary: zmin boundary condition
+        zmax_boundary: zmax boundary condition
+        pml_layers: Number of PML layers
+        include_dispersion: If True, include dispersion calculations
+        material_fit_tolerance: Material fit tolerance
+        material_name_to_lumerical: Mapping of PDK materials to Lumerical materials
+        is_bent_waveguide: If True, include bent waveguide simulation
+        bend_radius: Bend radius (um)
+        bend_location: Bend location
+        bend_location_x: x location of bend
+        bend_location_y: y location of bend
+        bend_location_z: z location of bend
+        efield_intensity_threshold: E-field intensity threshold at the edge of the simulation region
+    """
+    injection_axis: Literal["2D X normal", "2D Y normal"] = "2D X normal"
+
+    mesh_cells_per_wavl: int = 50
+
+    wavl: float = 1.55
+    wavl_start: float = 1.5
+    wavl_end: float = 1.6
+    wavl_pts: int = 20
+    num_modes: int = 20
+    target_mode: int = 1
+
+    # Simulation region to device edge margins
+    x: float = 0
+    y: float = 0
+    z: float = 0
+    xspan: float = 5.0
+    yspan: float = 5.0
+    zspan: float = 1.0
+
+    # Boundary conditions
+    xmin_boundary: Literal["Metal", "PML"] = "Metal"
+    xmax_boundary: Literal["Metal", "PML"] = "Metal"
+    ymin_boundary: Literal["Metal", "PML"] = "Metal"
+    ymax_boundary: Literal["Metal", "PML"] = "Metal"
+    zmin_boundary: Literal["Metal", "PML"] = "Metal"
+    zmax_boundary: Literal["Metal", "PML"] = "Metal"
+
+    pml_layers: int = 12
+    include_dispersion: bool = True
+    material_fit_tolerance: float = 0.001
+    material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
+
+    # Bent waveguide simulations
+    is_bent_waveguide: bool = False
+    bend_radius: float = 0
+    bend_location: Literal["simulation center", "user specified"] = "user specified"
+    bend_location_x: float = 0
+    bend_location_y: float = 0
+    bend_location_z: float = 0
+
+    efield_intensity_threshold: float = 1e-6
+
+    class Config:
+        arbitrary_types_allowed = True
+
+LUMERICAL_MODE_SIMULATION_SETTINGS = SimulationSettingsLumericalMode()

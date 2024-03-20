@@ -68,3 +68,23 @@ class ConvergenceSettingsLumericalCharge(BaseModel):
 
 
 LUMERICAL_CHARGE_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalCharge()
+
+
+class ConvergenceSettingsLumericalMode(BaseModel):
+    """
+    Lumerical MODE convergence settings
+
+    """
+    neff_diff: float = 0.01
+    ng_diff: float = 0.01
+    pol_diff: float = 0.001  # 0.01 = 1%
+
+    mesh_cell_step: int = 1
+    mesh_stable_limit: int = 10
+
+    field_stable_limit: int = 3
+
+    class Config:
+        arbitrary_types_allowed = True
+
+LUMERICAL_MODE_CONVERGENCE_SETTINGS = ConvergenceSettingsLumericalMode()
