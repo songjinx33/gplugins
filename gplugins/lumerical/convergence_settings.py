@@ -74,6 +74,13 @@ class ConvergenceSettingsLumericalMode(BaseModel):
     """
     Lumerical MODE convergence settings
 
+    Parameters:
+        neff_diff: Effective index variation that is considered stable.
+        ng_diff: Group index variation that is considered stable.
+        pol_diff: Polarization percentage variation that is considered stable.
+        mesh_cell_step: Number of mesh cells to increase during mesh convergence sweep.
+        mesh_stable_limit: Number of data points that are stable to be considered for mesh convergence.
+        field_stable_limit: Number of data points that are stable to be considered for field intensity convergence.
     """
     neff_diff: float = 0.01
     ng_diff: float = 0.01
