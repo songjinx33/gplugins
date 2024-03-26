@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import gdsfactory as gf
-import lumapi
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -59,7 +58,7 @@ class LumericalEmeSimulation:
         self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.MODE | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -160,6 +159,14 @@ class LumericalEmeSimulation:
 
         # Set up EME simulation based on provided simulation settings
         if not session:
+            try:
+                import lumapi
+            except Exception as e:
+                logger.error(
+                    "Cannot import lumapi (Python Lumerical API). "
+                    "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+                )
+                raise e
             session = lumapi.MODE(hide=hide)
         self.session = session
         s = session
@@ -206,7 +213,7 @@ class LumericalEmeSimulation:
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )

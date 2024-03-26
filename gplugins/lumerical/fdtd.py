@@ -35,17 +35,6 @@ from gplugins.lumerical.utils import (
     layerstack_to_lbr,
 )
 
-try:
-    import lumapi
-except ModuleNotFoundError as e:
-    print(
-        "Cannot import lumapi (Python Lumerical API). "
-        "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
-    )
-    raise e
-except OSError as e:
-    raise e
-
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
 
@@ -80,7 +69,7 @@ class LumericalFdtdSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.FDTD | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_settings: ConvergenceSettingsLumericalFdtd = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -336,6 +325,14 @@ class LumericalFdtdSimulation(Simulation):
         filepath_sim_settings.write_text(yaml.dump(sim_settings))
 
         # Create simulation
+        try:
+            import lumapi
+        except Exception as e:
+            logger.error(
+                "Cannot import lumapi (Python Lumerical API). "
+                "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+            )
+            raise e
         self.session = s = session or lumapi.FDTD(hide=hide)
         s.newproject()
         s.selectall()
@@ -369,7 +366,7 @@ class LumericalFdtdSimulation(Simulation):
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )
@@ -1042,7 +1039,7 @@ class LumericalFdtdSimulation(Simulation):
                         sparams[sparam] = [abs(data[sparam][0:wavl_points]) ** 2]
                     else:
                         sparams[sparam].append(abs(data[sparam][0:wavl_points]) ** 2)
-            except lumapi.LumApiError as err:
+            except Exception as err:
                 logger.warning(
                     f"{err} | Failed to load sparam data from {s.filebasename(s.currentfilename())}.fsp"
                 )
