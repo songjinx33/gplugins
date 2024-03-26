@@ -17,120 +17,18 @@ from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
 from gplugins.lumerical.config import cm, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_EME_CONVERGENCE_SETTINGS,
+    LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalEme,
     ConvergenceSettingsLumericalFdtd,
 )
 from gplugins.lumerical.eme import LumericalEmeSimulation
 from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
 from gplugins.lumerical.simulation_settings import (
+    SIMULATION_SETTINGS_LUMERICAL_FDTD,
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
     SimulationSettingsLumericalFdtd,
 )
-
-
-def example_run_taper_design_recipe():
-    ### 0. DEFINE WHERE FILES ARE SAVED
-    dirpath = Path(__file__).parent / "recipe_runs"
-    dirpath.mkdir(parents=True, exist_ok=True)
-
-    ### 1. DEFINE DESIGN INTENT
-    design_intent = RoutingTaperDesignIntent(
-        narrow_waveguide_routing_loss_per_cm=3,  # dB/cm
-    )
-
-    narrow_waveguide_cross_section = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=0.5,
-    )
-    wide_waveguide_cross_section = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=3.0,
-    )
-
-    ### 2. DEFINE LAYER STACK
-    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-
-    layerstack_lumerical = LayerStack(
-        layers={
-            "clad": LayerLevel(
-                layer=(99999, 0),
-                thickness=3.0,
-                zmin=0.0,
-                material="sio2",
-                sidewall_angle=0.0,
-                mesh_order=9,
-                layer_type="background",
-            ),
-            "box": LayerLevel(
-                layer=(99999, 0),
-                thickness=3.0,
-                zmin=-3.0,
-                material="sio2",
-                sidewall_angle=0.0,
-                mesh_order=9,
-                layer_type="background",
-            ),
-            "core": LayerLevel(
-                layer=(1, 0),
-                thickness=0.22,
-                zmin=0.0,
-                material="si",
-                sidewall_angle=2.0,
-                width_to_z=0.5,
-                mesh_order=2,
-                layer_type="grow",
-                info={"active": True},
-            ),
-        }
-    )
-
-    ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
-    eme_convergence_setup = ConvergenceSettingsLumericalEme(
-        sparam_diff=1 - 10 ** (-0.005 / 10)
-    )
-    eme_simulation_setup = SimulationSettingsLumericalEme()
-
-    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
-        sparam_diff=0.01
-    )
-    fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-        mesh_accuracy=2, port_translation=1.0, port_field_intensity_threshold=1e-6,
-    )
-
-    ### 4. CREATE AND RUN DESIGN RECIPE
-    eme_recipe = RoutingTaperDesignRecipe(
-        cell=taper_cross_section,
-        cross_section1=narrow_waveguide_cross_section,
-        cross_section2=wide_waveguide_cross_section,
-        design_intent=design_intent,
-        layer_stack=layerstack_lumerical,
-        simulation_setup=eme_simulation_setup,
-        convergence_setup=eme_convergence_setup,
-        dirpath=dirpath,
-    )
-    success = eme_recipe.eval()
-
-    fdtd_recipes = [
-        FdtdRecipe(
-            component=c,
-            layer_stack=layerstack_lumerical,
-            simulation_setup=fdtd_simulation_setup,
-            convergence_setup=fdtd_convergence_setup,
-            dirpath=dirpath,
-        )
-        for c in eme_recipe.components
-    ]
-    for recipe in fdtd_recipes:
-        success = success and recipe.eval()
-
-    if success:
-        logger.info("Completed taper design recipe.")
-    else:
-        logger.info("Incomplete run of taper design recipe.")
-
 
 class RoutingTaperDesignIntent(BaseModel):
     r"""
@@ -143,6 +41,7 @@ class RoutingTaperDesignIntent(BaseModel):
         start_length: Starting length in length sweep (um)
         stop_length: Ending length in length sweep (um)
         num_pts: Number of points to consider in length sweep
+        weights: Weights for weighted decision matrix when selecting best taper
 
                          |       |
                          |      /|---------
@@ -166,13 +65,18 @@ class RoutingTaperDesignIntent(BaseModel):
     stop_length: float = 200  # um
     num_pts: int = 200  # um
 
+    # Weights for decision matrix
+    weights: dict[str, float] = {"transmission": 0.4,
+                                 "reflection": 0.35,
+                                 "length": 0.25}
+
     class Config:
         arbitrary_types_allowed = True
 
 
-class RoutingTaperDesignRecipe(DesignRecipe):
+class RoutingTaperEmeDesignRecipe(DesignRecipe):
     """
-    Routing taper design recipe.
+    Routing taper design recipe using eigenmode expansion method (EME).
 
     Attributes:
         component: Optimal component geometry
@@ -180,15 +84,22 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         length_sweep: Length sweep results
         cross_section1: Left cross section
         cross_section2: Right cross section
-        design_intent: Taper design intent
-        simulation_setup: EME simulation setup
-        convergence_setup: EME convergence setup
-        dirpath: Directory to save files
+        recipe_setup:
+            cell_hash: Hash of GDSFactory component factory
+            layer_stack: PDK layerstack
+            simulation_setup: EME simulation setup
+            convergence_setup: EME convergence setup
+            design_intent: Taper design intent parameters
+        recipe_results:
+            length_sweep: Length sweep data (S21, S11) vs. device geometry
+            components_settings: Component settings for each device simulated in design recipe
+
     """
 
     # Results
     component: Component | None = None  # Optimal taper component
     length_sweep: pd.DataFrame | None = None  # Length sweep results
+    components: list[Component] | None = None
 
     def __init__(
         self,
@@ -268,6 +179,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             for wtype in typing.get_args(WidthTypes)
         ]
 
+        # Run EME length sweep simulations to extract S21 and S11 vs. length of device
         optimal_lengths = []
         transmission_coefficients = []
         reflection_coefficients = []
@@ -294,17 +206,18 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 )
                 continue
 
-            # Get length of taper that has lower loss than routing loss
+            # Extract S21 and S11 vs. length during length sweeps
             length_sweep = sim.get_length_sweep(
                 start_length=di.start_length,
                 stop_length=di.stop_length,
                 num_pts=di.num_pts,
             )
             length_sweeps.append(length_sweep)
-
             length = length_sweep.loc[:, "length"]
             s21 = 10 * np.log10(abs(length_sweep.loc[:, "s21"]) ** 2)
             s11 = 10 * np.log10(abs(length_sweep.loc[:, "s11"]) ** 2)
+
+            # Get length of taper that has lower loss than routing loss
             try:
                 ind = next(
                     k
@@ -323,6 +236,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                 transmission_coefficients.append(s21[-1])
                 reflection_coefficients.append(s11[-1])
 
+        # Log and save optimal lengths
         results = {
             f"{simulated_components[i].name} ({simulated_components[i].settings.get('width_type', 'Shape Unknown')})": f"L: {optimal_lengths[i]} | T: {transmission_coefficients[i]} | R: {reflection_coefficients[i]}"
             for i in range(0, len(simulated_components))
@@ -365,12 +279,275 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             )
             opt_length_sweep_data = length_sweeps[ind2]
 
-        # Save results
+        # Save general results
         self.component = optimal_component
         self.length_sweep = opt_length_sweep_data
+
+        # Save recipe results
+        self.recipe_results.length_sweep = self.length_sweep
+        self.recipe_results.components_settings = [c.settings.model_copy().model_dump() for c in self.components]
 
         return True
 
 
+class RoutingTaperDesignRecipe(DesignRecipe):
+    """
+    Routing taper design recipe.
+
+    Attributes:
+        best_component: Best taper component
+        cross_section1: Left cross section
+        cross_section2: Right cross section
+        recipe_setup:
+            eme_simulation_setup: EME simulation setup
+            eme_convergence_setup: EME convergence setup
+            fdtd_simulation_setup: FDTD simulation setup
+            fdtd_convergence_setup: FDTD convergence setup
+            design_intent: Taper design intent
+        recipe_results:
+            results: Key figures of merit for determining the best routing taper
+            cell_settings: Taper cell settings that create the best routing taper
+    """
+
+    def __init__(
+        self,
+        cell: ComponentFactory = taper_cross_section,
+        cross_section1: CrossSectionSpec | None = gf.cross_section.cross_section,
+        cross_section2: CrossSectionSpec | None = gf.cross_section.cross_section,
+        design_intent: RoutingTaperDesignIntent | None = None,
+        eme_simulation_setup: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
+        eme_convergence_setup: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
+        fdtd_simulation_setup: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
+        fdtd_convergence_setup: ConvergenceSettingsLumericalFdtd = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+        layer_stack: LayerStack | None = None,
+        dirpath: PathType | None = None,
+    ):
+        r"""
+        Set up routing taper design recipe
+
+                         |       |
+                         |      /|---------
+                         |    /  |
+                         |  /    |
+        -----------------|/      |
+        cross section 1  | taper | cross section 2
+        -----------------|\      |
+                         |  \    |
+                         |    \  |
+                         |      \|---------
+                         |       |
+
+        Parameters:
+            cell: Taper cell that uses cross sections to determine both ends of the taper
+            cross_section1: Left cross section
+            cross_section2: Right cross section
+            design_intent: Taper design intent
+            layer_stack: PDK layerstack
+            eme_simulation_setup: EME simulation setup
+            eme_convergence_setup: EME convergence setup
+            fdtd_simulation_setup: FDTD simulation setup
+            fdtd_convergence_setup: FDTD convergence setup
+            dirpath: Directory to save files
+        """
+        layer_stack = layer_stack or get_layer_stack()
+        super().__init__(cell=cell, layer_stack=layer_stack, dirpath=dirpath)
+        self.cross_section1 = cross_section1
+        self.cross_section2 = cross_section2
+        # Add information to recipe setup. NOTE: This is used for hashing
+        self.recipe_setup.eme_simulation_setup = eme_simulation_setup
+        self.recipe_setup.eme_convergence_setup = eme_convergence_setup
+        self.recipe_setup.fdtd_simulation_setup = fdtd_simulation_setup
+        self.recipe_setup.fdtd_convergence_setup = fdtd_convergence_setup
+        self.recipe_setup.design_intent = design_intent or RoutingTaperDesignIntent()
+
+
+    @eval_decorator
+    def eval(self, run_convergence: bool = True):
+        r"""
+        Run taper design recipe.
+
+        1. Sweep taper geometry in EME and get best geometry and length for component.
+        2. Run FDTD simulation to extract s-params
+        3. Select best taper based on weighted decision matrix with regards to:
+            a) Transmission
+            b) Reflection
+            c) Device Length
+
+        Parameters:
+            run_convergence: Run convergence if True
+        """
+        eme_recipe = RoutingTaperEmeDesignRecipe(
+            cell=self.cell,
+            cross_section1=self.cross_section1,
+            cross_section2=self.cross_section2,
+            design_intent=self.recipe_setup.design_intent,
+            layer_stack=self.recipe_setup.layer_stack,
+            simulation_setup=self.recipe_setup.eme_simulation_setup,
+            convergence_setup=self.recipe_setup.eme_convergence_setup,
+            dirpath=self.dirpath,
+        )
+        success = eme_recipe.eval(run_convergence=run_convergence)
+
+        fdtd_recipes = [
+            FdtdRecipe(
+                component=self.cell(
+                    cross_section1=self.cross_section1,
+                    cross_section2=self.cross_section2,
+                    length=settings["length"],  # um
+                    width_type=settings["width_type"],
+                ),
+                layer_stack=self.recipe_setup.layer_stack,
+                simulation_setup=self.recipe_setup.fdtd_simulation_setup,
+                convergence_setup=self.recipe_setup.fdtd_convergence_setup,
+                dirpath=self.dirpath,
+            )
+            for settings in eme_recipe.recipe_results.components_settings
+        ]
+        for recipe in fdtd_recipes:
+            success = success and recipe.eval(run_convergence=run_convergence)
+
+        # Select best taper based on weighted decision matrix:
+        # 1. Transmission
+        # 2. Reflection
+        # 3. Device Length
+
+        # Normalize weights to range between 0 to 1
+        weight_names = list(design_intent.weights.keys())
+        weight_values = np.array(list(design_intent.weights.values()))
+        norm_weight_values = weight_values / sum(weight_values)
+        norm_weight_values = list(norm_weight_values)
+
+        # Get average transmission and reflection across wavelength range
+        average_transmissions = []
+        average_reflections = []
+        for i in range(0, len(fdtd_recipes)):
+            average_transmissions.append(10*np.log10(np.mean(np.abs(fdtd_recipes[i].recipe_results.sparameters.loc[:, "S21"]) ** 2)))
+            average_reflections.append(10*np.log10(np.mean(np.abs(fdtd_recipes[i].recipe_results.sparameters.loc[:, "S11"]) ** 2)))
+
+        # Get component names and optimal lengths
+        taper_geometry_names = [f"{settings['width_type']}" for settings in eme_recipe.recipe_results.components_settings]
+        lengths = [settings["length"] for settings in eme_recipe.recipe_results.components_settings]
+
+        # Save results
+        self.recipe_results.results = pd.DataFrame([average_transmissions, average_reflections, lengths], weight_names, taper_geometry_names)
+        self.recipe_results.results.to_csv(str(self.recipe_dirpath / "results.csv"))
+
+        # Normalize results to range between 0 to 1 and ensure the more optimal devices have higher numbers
+        # Ex. Shorter lengths are more desirable, but for decision matrix calculations, we require a positive scale
+        average_transmissions = np.array(average_transmissions)
+        average_reflections = -np.array(average_reflections)
+        lengths = -np.array(lengths)
+
+        norm_average_transmissions = (average_transmissions - np.min(average_transmissions)) / (np.max(average_transmissions) - np.min(average_transmissions))
+        norm_average_reflections = (average_reflections - np.min(average_reflections)) / (np.max(average_reflections) - np.min(average_reflections))
+        norm_lengths = (lengths - np.min(lengths)) / (np.max(lengths) - np.min(lengths))
+
+        # Multiply by weights
+        weighted_transmissions = norm_average_transmissions * norm_weight_values[0]
+        weighted_reflections = norm_average_reflections * norm_weight_values[1]
+        weighted_lengths = norm_lengths * norm_weight_values[2]
+        weighted_score = [sum([weighted_transmissions[i], weighted_reflections[i], weighted_lengths[i]])
+                          for i in range(0, len(weighted_transmissions))]
+
+        # Save decision matrix results
+        self.recipe_results.weighted_decision_matrix = pd.DataFrame([list(weighted_transmissions),
+                                                 list(weighted_reflections),
+                                                 list(weighted_lengths),
+                                                 weighted_score
+                                                 ], weight_names + ["total_score"], taper_geometry_names)
+        self.recipe_results.weighted_decision_matrix.to_csv(str(self.recipe_dirpath / "weighted_decision_matrix.csv"))
+
+        best_component_index = weighted_score.index(max(weighted_score))
+        self.best_component = taper_cross_section(**eme_recipe.recipe_results.components_settings[best_component_index])
+        self.recipe_results.cell_settings = self.best_component.to_dict()
+
+        return success
+
+
 if __name__ == "__main__":
-    example_run_taper_design_recipe()
+    ### 0. DEFINE WHERE FILES ARE SAVED
+    dirpath = Path(__file__).parent / "recipe_runs"
+    dirpath.mkdir(parents=True, exist_ok=True)
+
+    ### 1. DEFINE DESIGN INTENT
+    design_intent = RoutingTaperDesignIntent(
+        narrow_waveguide_routing_loss_per_cm=3,  # dB/cm
+    )
+
+    narrow_waveguide_cross_section = partial(
+        gf.cross_section.cross_section,
+        layer=(1, 0),
+        width=0.5,
+    )
+    wide_waveguide_cross_section = partial(
+        gf.cross_section.cross_section,
+        layer=(1, 0),
+        width=3.0,
+    )
+
+    ### 2. DEFINE LAYER STACK
+    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+
+    layerstack_lumerical = LayerStack(
+        layers={
+            "clad": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=0.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "box": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=-3.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "core": LayerLevel(
+                layer=(1, 0),
+                thickness=0.22,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            ),
+        }
+    )
+
+    ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
+    eme_convergence_setup = ConvergenceSettingsLumericalEme(
+        sparam_diff=1 - 10 ** (-0.005 / 10)
+    )
+    eme_simulation_setup = SimulationSettingsLumericalEme()
+
+    fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
+        sparam_diff=0.01
+    )
+    fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
+        mesh_accuracy=2, port_translation=1.0, port_field_intensity_threshold=1e-6,
+    )
+
+    taper_recipe = RoutingTaperDesignRecipe(cell=taper_cross_section,
+                             cross_section1=narrow_waveguide_cross_section,
+                             cross_section2=wide_waveguide_cross_section,
+                             design_intent=design_intent,
+                             eme_simulation_setup=eme_simulation_setup,
+                             eme_convergence_setup=eme_convergence_setup,
+                             fdtd_simulation_setup=fdtd_simulation_setup,
+                             fdtd_convergence_setup=fdtd_convergence_setup,
+                             layer_stack=layerstack_lumerical,
+                             dirpath=dirpath)
+
+    success = taper_recipe.eval()
+    if success:
+        logger.info("Completed taper design recipe.")
+    else:
+        logger.info("Incomplete run of taper design recipe.")
