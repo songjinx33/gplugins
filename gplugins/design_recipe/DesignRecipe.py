@@ -64,8 +64,8 @@ class DesignRecipe:
     recipe_dirpath: Path | None = None
     run_convergence: bool = True
     override_recipe: bool = False
-    recipe_setup: Setup = Setup()
-    recipe_results: Results = Results()
+    recipe_setup: Setup | None = None
+    recipe_results: Results | None = None
 
     def __init__(
         self,
@@ -86,6 +86,7 @@ class DesignRecipe:
             cell_hash = self.cell.hash_geometry()
         self.recipe_setup = Setup(cell_hash=cell_hash,
                                   layer_stack=layer_stack)
+        self.recipe_results = Results(prefix="recipe")
 
     def __hash__(self) -> int:
         """
