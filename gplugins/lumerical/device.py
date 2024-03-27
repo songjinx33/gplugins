@@ -21,17 +21,6 @@ from gplugins.lumerical.simulation_settings import (
 )
 from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
-try:
-    import lumapi
-except ModuleNotFoundError as e:
-    print(
-        "Cannot import lumapi (Python Lumerical API). "
-        "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
-    )
-    raise e
-except OSError as e:
-    raise e
-
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
 
@@ -56,7 +45,7 @@ class LumericalChargeSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.DEVICE | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalCharge = LUMERICAL_CHARGE_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalCharge = LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
         boundary_settings: dict[str, dict] | None = None,
@@ -98,9 +87,18 @@ class LumericalChargeSimulation(Simulation):
         )
 
         ss = self.simulation_settings
-        cs = self.convergence_settings
 
         ### Get new CHARGE session
+        try:
+            import lumapi
+        except ModuleNotFoundError as e:
+            print(
+                "Cannot import lumapi (Python Lumerical API). "
+                "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+            )
+            raise e
+        except OSError as e:
+            raise e
         self.session = s = session or lumapi.DEVICE(hide=hide)
         s.newproject()
         s.deleteall()
@@ -483,7 +481,7 @@ class LumericalChargeSimulation(Simulation):
                 self.boundary_condition_settings[
                     settings["name"]
                 ] = self.boundary_condition_settings.pop(name)
-            except lumapi.LumApiError as err:
+            except Exception as err:
                 logger.warning(
                     f"{err}\nCannot find {name} boundary, skipping settings for this boundary."
                 )
@@ -492,7 +490,7 @@ class LumericalChargeSimulation(Simulation):
                 try:
                     s.set(setting, value)
                     self.boundary_condition_settings[settings["name"]][setting] = value
-                except lumapi.LumApiError as err:
+                except Exception as err:
                     logger.warning(
                         f"{err}\nCannot find {setting} setting, skipping setting."
                     )
