@@ -10,12 +10,10 @@ from functools import partial
 from gdsfactory.components.taper_cross_section import taper_cross_section
 
 ### 0. DEFINE WHERE FILES ARE SAVED
-dirpath = Path(__file__).parent / "recipe_runs" / "fdtd_recipe"
+dirpath = Path("../recipes/recipe_runs")
 dirpath.mkdir(parents=True, exist_ok=True)
 
 ### 1. DEFINE DESIGN
-
-
 xs_wg = partial(
     gf.cross_section.cross_section,
     layer=(1, 0),
