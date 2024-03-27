@@ -241,7 +241,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
             f"{simulated_components[i].name} ({simulated_components[i].settings.get('width_type', 'Shape Unknown')})": f"L: {optimal_lengths[i]} | T: {transmission_coefficients[i]} | R: {reflection_coefficients[i]}"
             for i in range(0, len(simulated_components))
         }
-        with open(str(self.recipe_dirpath / "optimal_lengths.txt"), "w") as f:
+        with open(str(self.recipe_dirpath.resolve() / "optimal_lengths.txt"), "w") as f:
             f.write(f"{results}")
         logger.info(f"{results}")
         self.components = [
@@ -386,6 +386,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             convergence_setup=self.recipe_setup.eme_convergence_setup,
             dirpath=self.dirpath,
         )
+        eme_recipe.override_recipe = self.override_recipe
         success = eme_recipe.eval(run_convergence=run_convergence)
 
         fdtd_recipes = [
@@ -404,6 +405,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             for settings in eme_recipe.recipe_results.components_settings
         ]
         for recipe in fdtd_recipes:
+            recipe.override_recipe = self.override_recipe
             success = success and recipe.eval(run_convergence=run_convergence)
 
         # Select best taper based on weighted decision matrix:
@@ -430,7 +432,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
 
         # Save results
         self.recipe_results.results = pd.DataFrame([average_transmissions, average_reflections, lengths], weight_names, taper_geometry_names)
-        self.recipe_results.results.to_csv(str(self.recipe_dirpath / "results.csv"))
+        self.recipe_results.results.to_csv(str(self.recipe_dirpath.resolve() / "results.csv"))
 
         # Normalize results to range between 0 to 1 and ensure the more optimal devices have higher numbers
         # Ex. Shorter lengths are more desirable, but for decision matrix calculations, we require a positive scale
@@ -455,7 +457,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
                                                  list(weighted_lengths),
                                                  weighted_score
                                                  ], weight_names + ["total_score"], taper_geometry_names)
-        self.recipe_results.weighted_decision_matrix.to_csv(str(self.recipe_dirpath / "weighted_decision_matrix.csv"))
+        self.recipe_results.weighted_decision_matrix.to_csv(str(self.recipe_dirpath.resolve() / "weighted_decision_matrix.csv"))
 
         best_component_index = weighted_score.index(max(weighted_score))
         self.best_component = taper_cross_section(**eme_recipe.recipe_results.components_settings[best_component_index])
@@ -545,7 +547,7 @@ if __name__ == "__main__":
                              fdtd_convergence_setup=fdtd_convergence_setup,
                              layer_stack=layerstack_lumerical,
                              dirpath=dirpath)
-
+    taper_recipe.override_recipe = False
     success = taper_recipe.eval()
     if success:
         logger.info("Completed taper design recipe.")

@@ -128,7 +128,7 @@ class LumericalEmeSimulation(Simulation):
             override_convergence: Override convergence results and run convergence testing
         """
         # Set up variables
-        dirpath = dirpath or Path(__file__).resolve().parent
+        dirpath = dirpath or Path(".")
         simulation_settings = dict(simulation_settings)
 
         if hasattr(component.info, "simulation_settings"):
@@ -230,7 +230,7 @@ class LumericalEmeSimulation(Simulation):
         gdspath = component_extended_beyond_pml.write_gds()
 
         process_file_path = layerstack_to_lbr(
-            ss.material_name_to_lumerical, layerstack, self.simulation_dirpath
+            ss.material_name_to_lumerical, layerstack, self.simulation_dirpath.resolve()
         )
 
         # Create device geometry
@@ -334,7 +334,7 @@ class LumericalEmeSimulation(Simulation):
 
         s.set("pml layers", ss.pml_layers)
 
-        s.save(str(self.simulation_dirpath / f"{component.name}.lms"))
+        s.save(str(self.simulation_dirpath.resolve() / f"{component.name}.lms"))
 
         # Run convergence testing if no convergence results are available or user wants to override convergence results
         # or if setup has changed
@@ -444,7 +444,7 @@ class LumericalEmeSimulation(Simulation):
             plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
             plt.savefig(
                 str(
-                    self.simulation_dirpath
+                    self.simulation_dirpath.resolve()
                     / f"{self.component.name}_eme_mesh_convergence.png"
                 )
             )
@@ -454,7 +454,7 @@ class LumericalEmeSimulation(Simulation):
         )
         convergence_data.to_csv(
             str(
-                self.simulation_dirpath
+                self.simulation_dirpath.resolve()
                 / f"{self.component.name}_eme_mesh_convergence.csv"
             )
         )
@@ -525,7 +525,7 @@ class LumericalEmeSimulation(Simulation):
             plt.tight_layout()
             plt.savefig(
                 str(
-                    self.simulation_dirpath
+                    self.simulation_dirpath.resolve()
                     / f"{self.component.name}_eme_cell_convergence.png"
                 )
             )
@@ -535,7 +535,7 @@ class LumericalEmeSimulation(Simulation):
         )
         convergence_data.to_csv(
             str(
-                self.simulation_dirpath
+                self.simulation_dirpath.resolve()
                 / f"{self.component.name}_eme_cell_convergence.csv"
             )
         )
@@ -607,7 +607,7 @@ class LumericalEmeSimulation(Simulation):
             plt.tight_layout()
             plt.savefig(
                 str(
-                    self.simulation_dirpath
+                    self.simulation_dirpath.resolve()
                     / f"{self.component.name}_eme_mode_convergence.png"
                 )
             )
@@ -617,7 +617,7 @@ class LumericalEmeSimulation(Simulation):
         )
         convergence_data.to_csv(
             str(
-                self.simulation_dirpath
+                self.simulation_dirpath.resolve()
                 / f"{self.component.name}_eme_mode_convergence.csv"
             )
         )
@@ -723,7 +723,7 @@ class LumericalEmeSimulation(Simulation):
             plt.tight_layout()
             plt.savefig(
                 str(
-                    self.simulation_dirpath
+                    self.simulation_dirpath.resolve()
                     / f"{self.component.name}_eme_overall_convergence.png"
                 )
             )
@@ -738,7 +738,7 @@ class LumericalEmeSimulation(Simulation):
         )
         convergence_data.to_csv(
             str(
-                self.simulation_dirpath
+                self.simulation_dirpath.resolve()
                 / f"{self.component.name}_eme_overall_convergence.csv"
             )
         )
@@ -809,7 +809,7 @@ class LumericalEmeSimulation(Simulation):
         )
 
         length_sweep2.to_csv(
-            str(self.simulation_dirpath / f"{self.component.name}_length_sweep.csv")
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_length_sweep.csv")
         )
         return length_sweep
 
@@ -845,7 +845,7 @@ class LumericalEmeSimulation(Simulation):
         plt.ylabel("Magnitude")
         plt.title(f"Length Sweep | Wavelength={self.simulation_settings.wavelength}um")
         plt.tight_layout()
-        plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_length_sweep.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_length_sweep.png"))
 
         return fig
 
@@ -1047,7 +1047,7 @@ class LumericalEmeSimulation(Simulation):
         fig.tight_layout()
 
         fig.savefig(
-            str(self.simulation_dirpath / f"{self.component.name}_mode_coupling.png"),
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_mode_coupling.png"),
             bbox_inches="tight",
         )
 
@@ -1116,7 +1116,7 @@ class LumericalEmeSimulation(Simulation):
         plt.ylabel("Effective Index")
         plt.legend(loc="upper left", bbox_to_anchor=(1.04, 1))
         plt.tight_layout()
-        plt.savefig(str(self.simulation_dirpath / f"{self.component.name}_neff_vs_position.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_neff_vs_position.png"))
 
 
 if __name__ == "__main__":
