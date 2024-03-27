@@ -35,153 +35,16 @@ from gplugins.lumerical.utils import (
     layerstack_to_lbr,
 )
 
-try:
-    import lumapi
-except ModuleNotFoundError as e:
-    print(
-        "Cannot import lumapi (Python Lumerical API). "
-        "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
-    )
-    raise e
-except OSError as e:
-    raise e
-
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
-
-run_false_warning = """
-You have passed run=False to debug the simulation
-
-run=False returns the simulation session for you to debug and make sure it is correct
-
-To compute the Sparameters you need to pass run=True
-"""
-
-
-def main():
-    from functools import partial
-
-    from gdsfactory.components.taper_cross_section import taper_cross_section
-
-    xs_wg = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=0.5,
-    )
-
-    xs_wg_wide = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=2.0,
-    )
-
-    taper = taper_cross_section(
-        cross_section1=xs_wg,
-        cross_section2=xs_wg_wide,
-        length=5,
-        width_type="parabolic",
-    )
-
-    from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-
-    layerstack_lumerical2021 = LayerStack(
-        layers={
-            "clad": LayerLevel(
-                name=None,
-                layer=(99999, 0),
-                thickness=3.0,
-                thickness_tolerance=None,
-                zmin=0.0,
-                zmin_tolerance=None,
-                material="sio2",
-                sidewall_angle=0.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.0,
-                z_to_bias=None,
-                mesh_order=9,
-                layer_type="background",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={},
-                background_doping_concentration=None,
-                background_doping_ion=None,
-                orientation="100",
-            ),
-            "box": LayerLevel(
-                name=None,
-                layer=(99999, 0),
-                thickness=3.0,
-                thickness_tolerance=None,
-                zmin=-3.0,
-                zmin_tolerance=None,
-                material="sio2",
-                sidewall_angle=0.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.0,
-                z_to_bias=None,
-                mesh_order=9,
-                layer_type="background",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={},
-                background_doping_concentration=None,
-                background_doping_ion=None,
-                orientation="100",
-            ),
-            "core": LayerLevel(
-                name=None,
-                layer=(1, 0),
-                thickness=0.22,
-                thickness_tolerance=None,
-                zmin=0.0,
-                zmin_tolerance=None,
-                material="si",
-                sidewall_angle=10.0,
-                sidewall_angle_tolerance=None,
-                width_to_z=0.5,
-                z_to_bias=None,
-                mesh_order=2,
-                layer_type="grow",
-                mode=None,
-                into=None,
-                resistivity=None,
-                bias=None,
-                derived_layer=None,
-                info={"active": True},
-                background_doping_concentration=100000000000000.0,
-                background_doping_ion="Boron",
-                orientation="100",
-            ),
-            # KNOWN ISSUE: Lumerical 2021 version of Layer Builder does not support dopants in process file
-        }
-    )
-    SIMULATION_SETTINGS_LUMERICAL_FDTD.port_translation = 1.0
-    sim = LumericalFdtdSimulation(
-        component=taper,
-        layerstack=layerstack_lumerical2021,
-        convergence_settings=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-        simulation_settings=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-        hide=False,
-        run_port_convergence=True,
-        run_mesh_convergence=False,
-    )
-
-    sp = sim.write_sparameters(overwrite=True)
-    print(sp)
-    print("Done")
 
 
 class LumericalFdtdSimulation(Simulation):
     """
     Lumerical FDTD simulation
 
-    Set up FDTD simulation based on component geometry and simulation settings. Optionally, run convergence.
+    Set up FDTD simulation based on component geometry and simulation settings. Optionally, run convergence sweeps to ensure
+    simulations are accurate.
 
     Attributes:
         component: Component geometry to simulate
@@ -191,14 +54,14 @@ class LumericalFdtdSimulation(Simulation):
         convergence_settings: FDTD convergence settings
         dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
                     be where simulation files are saved.
-        filepath_npz: S-parameter filepath (npz)
-        filepath_fsp: FDTD simulation filepath (fsp)
+        filepath_npz: S-parameter output filepath (npz)
+        filepath_fsp: FDTD simulation output filepath (fsp)
         convergence_results: Dynamic object used to store convergence results
             simulation_settings: FDTD simulation settings
             convergence_settings: FDTD convergence settings
-            mesh_convergence_data: Mesh convergence results
+            mesh_convergence_data: Mesh convergence results passed from update_mesh_convergence method
             field_intensity_convergence_data: Convergence results after sweeping field intensity threshold at ports vs.
-                                                sparam variation.
+                                                sparam variation. Results passed from update_field_intensity_threshold.
 
     """
 
@@ -206,7 +69,7 @@ class LumericalFdtdSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.FDTD | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_settings: ConvergenceSettingsLumericalFdtd = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -236,7 +99,8 @@ class LumericalFdtdSimulation(Simulation):
         - dirpath
         - layerStack
 
-        converts gdsfactory units (um) to Lumerical units (m)
+        converts gdsfactory units (um) to Lumerical units (m) by mulitplying by a unit conversion constant called "um"
+        found in gplugins/lumerical/config.py
 
         Disclaimer: This function tries to create a generalized FDTD simulation to extract Sparameters.
         It is hard to make a function that will fit all your possible simulation settings.
@@ -461,6 +325,14 @@ class LumericalFdtdSimulation(Simulation):
         filepath_sim_settings.write_text(yaml.dump(sim_settings))
 
         # Create simulation
+        try:
+            import lumapi
+        except Exception as e:
+            logger.error(
+                "Cannot import lumapi (Python Lumerical API). "
+                "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+            )
+            raise e
         self.session = s = session or lumapi.FDTD(hide=hide)
         s.newproject()
         s.selectall()
@@ -494,7 +366,7 @@ class LumericalFdtdSimulation(Simulation):
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )
@@ -1171,7 +1043,7 @@ class LumericalFdtdSimulation(Simulation):
                         sparams[sparam] = [abs(data[sparam][0:wavl_points]) ** 2]
                     else:
                         sparams[sparam].append(abs(data[sparam][0:wavl_points]) ** 2)
-            except lumapi.LumApiError as err:
+            except Exception as err:
                 logger.warning(
                     f"{err} | Failed to load sparam data from {s.filebasename(s.currentfilename())}.fsp"
                 )
@@ -1257,7 +1129,6 @@ class LumericalFdtdSimulation(Simulation):
         port_modes: dict | None = None,
         mesh_accuracy: int = 4,
         wavl_points: int = 1,
-        delete_fsp_files: bool = False,
         plot: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1359,7 +1230,3 @@ class LumericalFdtdSimulation(Simulation):
                     )
 
         return df
-
-
-if __name__ == "__main__":
-    main()

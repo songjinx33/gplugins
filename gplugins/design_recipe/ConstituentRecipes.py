@@ -16,7 +16,7 @@ class ConstituentRecipes:
     That is, non-nested dependencies are considered independent.
     """
 
-    constituent_recipes: list[dr.DesignRecipe] = []
+    constituent_recipes: list[dr.DesignRecipe]
 
     # The next index to yield out of constituent_recipes.
     idx_to_yield: int = 0
@@ -26,7 +26,7 @@ class ConstituentRecipes:
     iter_lock: threading.Lock
 
     def __init__(self, recipes: list[dr.DesignRecipe]):
-        self.constituent_recipes = recipes
+        self.constituent_recipes = recipes or []
         self.lock = threading.Lock()
 
     def __iter__(self):
@@ -37,7 +37,7 @@ class ConstituentRecipes:
         # we can't handle that right now, so try and prevent it
         assert (
             self.idx_to_yield == 0
-        ), "you can't concurrently iterate through  multiple instances of this ConstituentRecipes"
+        ), "you can't concurrently iterate through multiple instances of this ConstituentRecipes"
 
         return self
 

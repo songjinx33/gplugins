@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import gdsfactory as gf
-import lumapi
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -32,47 +31,9 @@ from gplugins.lumerical.simulation_settings import (
 from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
 
-def main():
-    from functools import partial
-
-    from gdsfactory.components.taper_cross_section import taper_cross_section
-
-    xs_wg = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=0.5,
-    )
-
-    xs_wg_wide = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=2.0,
-    )
-
-    taper = taper_cross_section(
-        cross_section1=xs_wg,
-        cross_section2=xs_wg_wide,
-        length=5,
-        width_type="parabolic",
-    )
-
-    sim = LumericalEmeSimulation(
-        taper,
-        run_mesh_convergence=False,
-        run_cell_convergence=False,
-        run_mode_convergence=True,
-        run_overall_convergence=True,
-        override_convergence=False,
-        hide=False,
-    )
-
-    data = sim.get_length_sweep()
-    logger.info(f"{data}\nDone")
-
-
-class LumericalEmeSimulation(Simulation):
+class LumericalEmeSimulation:
     """
-    Lumerical EME simulation
+    Lumerical EME simulation plugin for running EME simulations on GDSFactory designs
 
     Attributes:
         component: Component geometry to simulate
@@ -97,7 +58,7 @@ class LumericalEmeSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.MODE | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -198,6 +159,14 @@ class LumericalEmeSimulation(Simulation):
 
         # Set up EME simulation based on provided simulation settings
         if not session:
+            try:
+                import lumapi
+            except Exception as e:
+                logger.error(
+                    "Cannot import lumapi (Python Lumerical API). "
+                    "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+                )
+                raise e
             session = lumapi.MODE(hide=hide)
         self.session = session
         s = session
@@ -244,7 +213,7 @@ class LumericalEmeSimulation(Simulation):
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )
@@ -405,7 +374,7 @@ class LumericalEmeSimulation(Simulation):
             s.switchtolayout()
             s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
             s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
-            # Get sparams and refine mesh
+            # Get sparams
             s.run()
             s.emepropagate()
             S = s.getresult("EME", "user s matrix")
@@ -413,6 +382,7 @@ class LumericalEmeSimulation(Simulation):
             s21.append(abs(S[1, 0]) ** 2)
             mesh_cells_per_wavl.append(ss.mesh_cells_per_wavelength)
 
+            # Refine mesh
             ss.mesh_cells_per_wavelength += 1
 
             # Check whether convergence has been reached
@@ -990,7 +960,7 @@ class LumericalEmeSimulation(Simulation):
         self, input_mode: int, max_coupled_mode: int = None, group: int = 1
     ) -> None:
         """
-        Plot mode coupling coefficients from the input_mode to the max_coupled_mode.
+        Plot mode coupling coefficients from the input_mode to the max_coupled_mode vs. position.
         Mode numbers start from 1 (fundamental mode).
 
         Parameters:
@@ -1055,7 +1025,7 @@ class LumericalEmeSimulation(Simulation):
 
     def get_neff_vs_position(self, group: int = 1) -> pd.DataFrame:
         """
-        Get effective index vs position along device
+        Get effective index vs position along device for a given cell group
 
         Parameters:
             group: Group of cells to consider. First group is 0.
@@ -1121,7 +1091,3 @@ class LumericalEmeSimulation(Simulation):
         plt.savefig(
             str(self.simulation_dirpath / f"{self.component.name}_neff_vs_position.png")
         )
-
-
-if __name__ == "__main__":
-    main()

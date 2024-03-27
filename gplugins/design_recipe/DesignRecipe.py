@@ -66,8 +66,8 @@ class DesignRecipe:
     recipe_dirpath: Path | None = None
     run_convergence: bool = True
     override_recipe: bool = False
-    recipe_setup: Setup = Setup()
-    recipe_results: Results = Results()
+    recipe_setup: Setup | None = None
+    recipe_results: Results | None = None
 
     def __init__(
         self,
@@ -76,7 +76,6 @@ class DesignRecipe:
         layer_stack: LayerStack = get_layer_stack(),
         dirpath: Path | None = None,
     ):
-        dependencies = dependencies or []
         self.dependencies = dr.ConstituentRecipes(dependencies)
         self.dirpath = dirpath or Path(__file__).resolve().parent
         self.cell = cell
@@ -86,7 +85,9 @@ class DesignRecipe:
             cell_hash = self.cell().hash_geometry()
         elif type(self.cell) == Component:
             cell_hash = self.cell.hash_geometry()
-        self.recipe_setup = Setup(cell_hash=cell_hash, layer_stack=layer_stack)
+        self.recipe_setup = Setup(cell_hash=cell_hash,
+                                  layer_stack=layer_stack)
+        self.recipe_results = Results(prefix="recipe")
 
     def __hash__(self) -> int:
         """
@@ -94,7 +95,7 @@ class DesignRecipe:
         This is used to determine 'freshness' of a recipe (i.e. if it needs to be rerun)
 
         Hashed items:
-        - component or cell
+        - component / cell geometry
         - layer stack
         """
         h = hashlib.sha1()
@@ -132,6 +133,9 @@ class DesignRecipe:
         (e.g. run the fdtd engine).
         Here we only evaluate dependencies,
         since the generic DesignRecipe has no underlying task.
+
+        Parameters:
+            force_rerun_all: Forces design recipes to be re-evaluated
         """
         success = self.eval_dependencies(force_rerun_all)
 
@@ -143,6 +147,9 @@ class DesignRecipe:
         Evaluate this `DesignRecipe`'s dependencies.
         Because `dependencies` are assumed to be independent,
         they can be evaluated in any order.
+
+        Parameters:
+            force_rerun_all: Forces design recipes to be re-evaluated
         """
         success = True
         for recipe in self.dependencies:
@@ -207,9 +214,7 @@ def eval_decorator(func):
         self.last_hash = self.__hash__()
 
         # Create directory for recipe results
-        self.recipe_dirpath = (
-            self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
-        )
+        self.recipe_dirpath = self.dirpath / f"{self.__class__.__name__}_{self.last_hash}"
         self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
         self.recipe_results.dirpath = self.recipe_dirpath
         self.recipe_results.prefix = "recipe"
