@@ -181,7 +181,7 @@ class LumericalFdtdSimulation(Simulation):
         """
         if isinstance(dirpath, str) and not dirpath == "":
             dirpath = Path(dirpath)
-        self.dirpath = dirpath = dirpath or Path(__file__).resolve().parent
+        self.dirpath = dirpath or Path(".")
 
         self.convergence_settings = (
             convergence_settings or LUMERICAL_FDTD_CONVERGENCE_SETTINGS
@@ -304,7 +304,7 @@ class LumericalFdtdSimulation(Simulation):
         # Define filepaths
         self.filepath_npz = get_sparameters_path(
             component=component,
-            dirpath=self.simulation_dirpath,
+            dirpath=self.simulation_dirpath.resolve(),
             layer_stack=layer_stack,
             **settings,
         )
@@ -354,7 +354,7 @@ class LumericalFdtdSimulation(Simulation):
 
         # Create Layer Builder object and insert geometry
         process_file_path = layerstack_to_lbr(
-            ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath
+            ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath.resolve()
         )
         draw_geometry(s, gdspath, process_file_path)
 
@@ -599,9 +599,7 @@ class LumericalFdtdSimulation(Simulation):
             plt.grid("on")
             plt.legend()
             plt.tight_layout()
-            plt.savefig(
-                str(self.simulation_dirpath / f"{self.component.name}_s-parameters.png")
-            )
+            plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_s-parameters.png"))
 
         return sparam_data
 
@@ -1001,14 +999,12 @@ class LumericalFdtdSimulation(Simulation):
             s.set("mesh accuracy", mesh_accuracy)
             base_filename = f"{self.component.name}_mesh-accuracy-{mesh_accuracy}"
 
-            convergence_sims.append(
-                str(self.simulation_dirpath / f"{base_filename}.fsp")
-            )
+            convergence_sims.append(str(self.simulation_dirpath.resolve() / f"{base_filename}.fsp"))
             mesh_accuracies.append(mesh_accuracy)
 
             s.save(convergence_sims[-1])
             s.savesweep()
-            sparam_dir = self.simulation_dirpath / f"{base_filename}_s-parametersweep"
+            sparam_dir = self.simulation_dirpath.resolve() / f"{base_filename}_s-parametersweep"
             for f in list(sparam_dir.glob("*.fsp")):
                 sparam_sims.append(str(f))
 
@@ -1081,12 +1077,7 @@ class LumericalFdtdSimulation(Simulation):
             plt.xlabel("Mesh Accuracy")
             plt.grid("on")
             plt.tight_layout()
-            plt.savefig(
-                str(
-                    self.simulation_dirpath
-                    / f"{self.component.name}_fdtd_mesh_convergence.png"
-                )
-            )
+            plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_fdtd_mesh_convergence.png"))
 
         # If not converged, set to maximum mesh accuracy
         if not converged:
@@ -1117,10 +1108,7 @@ class LumericalFdtdSimulation(Simulation):
 
         convergence_data = pd.DataFrame(sparams)
         convergence_data.to_csv(
-            str(
-                self.simulation_dirpath
-                / f"{self.component.name}_fdtd_mesh_convergence.csv"
-            )
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_fdtd_mesh_convergence.csv")
         )
         return convergence_data
 
@@ -1200,10 +1188,7 @@ class LumericalFdtdSimulation(Simulation):
         # Save convergence results
         df = pd.DataFrame(sparams)
         df.to_csv(
-            str(
-                self.simulation_dirpath
-                / f"{self.component.name}_fdtd_efield_intensity_convergence.csv"
-            )
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_fdtd_efield_intensity_convergence.csv")
         )
 
         # Restore simulation settings
@@ -1224,7 +1209,7 @@ class LumericalFdtdSimulation(Simulation):
                     plt.tight_layout()
                     plt.savefig(
                         str(
-                            self.simulation_dirpath
+                            self.simulation_dirpath.resolve()
                             / f"{self.component.name}_fdtd_efield_intensity_convergence_{k}.png"
                         )
                     )

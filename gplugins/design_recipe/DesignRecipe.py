@@ -77,7 +77,7 @@ class DesignRecipe:
         dirpath: Path | None = None,
     ):
         self.dependencies = dr.ConstituentRecipes(dependencies)
-        self.dirpath = dirpath or Path(__file__).resolve().parent
+        self.dirpath = dirpath or Path(".")
         self.cell = cell
 
         # Initialize recipe setup
@@ -176,7 +176,7 @@ class DesignRecipe:
         saved for future reference/recall.
         """
         self.recipe_results.recipe_setup = self.recipe_setup
-        self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
+        self.recipe_dirpath.resolve().mkdir(parents=True, exist_ok=True)
         self.recipe_results.save_pickle()
 
     def is_same_recipe_results(self) -> bool:
@@ -220,7 +220,7 @@ def eval_decorator(func):
         self.recipe_results.prefix = "recipe"
 
         # Add text file outlining dependencies for traceability
-        with open(str(self.recipe_dirpath / "recipe_dependencies.txt"), "w") as f:
+        with open(str(self.recipe_dirpath.resolve() / "recipe_dependencies.txt"), "w") as f:
             dependencies = [f"{recipe.__class__.__name__}_{recipe.last_hash}" for recipe in self.dependencies]
             dependencies = "\n".join(dependencies)
             f.write(dependencies)
