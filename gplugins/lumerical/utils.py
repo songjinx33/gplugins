@@ -147,7 +147,7 @@ def layerstack_to_lbr(
     xml_str = reparsed.toprettyxml(indent="  ")
 
     if dirpath:
-        process_file_path = Path(str(dirpath)) / "process.lbr"
+        process_file_path = Path(str(dirpath.resolve())) / "process.lbr"
     else:
         process_file_path = Path(__file__).resolve().parent / "process.lbr"
     with open(str(process_file_path), "w") as f:
@@ -194,7 +194,7 @@ class Results:
     def __init__(self, prefix: str = "", dirpath: Path | None = None, **kwargs):
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
-        self.dirpath = dirpath or Path(__file__).resolve().parent
+        self.dirpath = dirpath or Path(".")
         self.prefix = prefix
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -207,10 +207,10 @@ class Results:
             dirpath: Directory to store pickle file
         """
         if dirpath is None:
-            with open(str(self.dirpath / f"{self.prefix}_results.pkl"), "wb") as f:
+            with open(str(self.dirpath.resolve() / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
         else:
-            with open(str(dirpath / f"{self.prefix}_results.pkl"), "wb") as f:
+            with open(str(dirpath.resolve() / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
 
     def get_pickle(self, dirpath: Path | None = None) -> object:
@@ -226,10 +226,10 @@ class Results:
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
         if dirpath is None:
-            with open(str(self.dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
+            with open(str(self.dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 results = pickle.load(f)
         else:
-            with open(str(dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
+            with open(str(dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 results = pickle.load(f)
 
         return results
@@ -247,9 +247,9 @@ class Results:
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
         if dirpath is None:
-            results_file = self.dirpath / f"{self.prefix}_results.pkl"
+            results_file = self.dirpath.resolve() / f"{self.prefix}_results.pkl"
         else:
-            results_file = dirpath / f"{self.prefix}_results.pkl"
+            results_file = dirpath.resolve() / f"{self.prefix}_results.pkl"
         return results_file.is_file()
 
 
@@ -274,7 +274,7 @@ class Simulation:
         convergence_settings: pydantic.BaseModel | None = None,
         dirpath: Path | None = None,
     ):
-        self.dirpath = dirpath or Path(__file__).resolve().parent
+        self.dirpath = dirpath or Path(".")
         self.component = component
         self.layerstack = layerstack or get_layer_stack()
         self.simulation_settings = simulation_settings
@@ -364,3 +364,4 @@ class Simulation:
             )
         except AttributeError:
             return False
+
