@@ -5,7 +5,7 @@ from gplugins.lumerical.convergence_settings import LUMERICAL_CHARGE_CONVERGENCE
 from gplugins.lumerical.device import LumericalChargeSimulation
 import gdsfactory as gf
 
-### Create curved PN junction
+# Create curved PN junction
 c = gf.Component()
 cross_section_pn = partial(
     gf.cross_section.pn,
@@ -104,7 +104,7 @@ layer_stack.layers["PPP"] = LayerLevel(
 
 c.show()
 
-### Set up simulation settings
+# Set up simulation settings
 charge_settings = SimulationSettingsLumericalCharge(x=10, y=10)
 boundary_settings = {
     "b0": {
