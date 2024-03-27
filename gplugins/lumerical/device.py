@@ -10,7 +10,7 @@ from gdsfactory.config import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 
-from gplugins.lumerical.config import cm, um
+from gplugins.lumerical.config import cm, um, OPACITY, MATERIAL_COLORS
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalCharge,
@@ -34,20 +34,6 @@ except OSError as e:
 
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
-
-# Format for colors (R, G, B, opacity)
-OPACITY = 0.4
-MATERIAL_COLORS = [
-    np.array([1, 0, 0, OPACITY]),
-    np.array([1, 0.5, 0, OPACITY]),
-    np.array([1, 1, 0, OPACITY]),
-    np.array([0.5, 1, 0, OPACITY]),
-    np.array([0, 1, 1, OPACITY]),
-    np.array([0, 0.5, 1, OPACITY]),
-    np.array([0, 0, 1, OPACITY]),
-    np.array([0.5, 0, 1, OPACITY]),
-    np.array([1, 0, 1, OPACITY]),
-] * 10
 
 
 def main():
@@ -184,24 +170,6 @@ def main():
         boundary_settings=boundary_settings,
         hide=False,
     )
-    boundary_settings = {
-        "anode": {
-            "name": "N+",
-        },
-        "cathode": {
-            "name": "P+",
-        },
-    }
-    sim.set_boundary_conditions(boundary_settings)
-    boundary_settings = {
-        "N": {
-            "name": "P",
-        },
-        "P": {
-            "name": "N",
-        },
-    }
-    sim.set_boundary_conditions(boundary_settings)
     print("Done")
 
 
