@@ -1,7 +1,8 @@
+import os
 import hashlib
 import pickle
 import xml.etree.ElementTree as ET
-from pathlib import Path
+from pathlib import Path, PosixPath, WindowsPath
 from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement
 
@@ -227,10 +228,12 @@ class Results:
             dirpath = Path(dirpath)
         if dirpath is None:
             with open(str(self.dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
-                results = pickle.load(f)
+                unpickler = PathUnpickler(f)
+                results = unpickler.load()
         else:
             with open(str(dirpath / f"{self.prefix}_results.pkl"), "rb") as f:
-                results = pickle.load(f)
+                unpickler = PathUnpickler(f)
+                results = unpickler.load()
 
         return results
 
@@ -364,3 +367,13 @@ class Simulation:
             )
         except AttributeError:
             return False
+
+
+class PathUnpickler(pickle.Unpickler):
+    """
+    Unpickles objects while handling OS-dependent paths
+    """
+    def find_class(self, module, name):
+        if module == 'pathlib' and (name == 'PosixPath' or name == "WindowsPath"):
+            return WindowsPath if os.name == 'nt' else PosixPath
+        return super().find_class(module, name)

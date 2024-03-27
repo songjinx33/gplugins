@@ -466,7 +466,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
 
 if __name__ == "__main__":
     ### 0. DEFINE WHERE FILES ARE SAVED
-    dirpath = Path(__file__).parent / "recipe_runs"
+    dirpath = Path("recipe_runs")
     dirpath.mkdir(parents=True, exist_ok=True)
 
     ### 1. DEFINE DESIGN INTENT
