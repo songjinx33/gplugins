@@ -8,6 +8,7 @@ from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
+from gdsfactory.config import logger
 from pydantic import BaseModel
 
 import gplugins.design_recipe as dr
@@ -218,6 +219,7 @@ def eval_decorator(func):
         self.recipe_dirpath.mkdir(parents=True, exist_ok=True)
         self.recipe_results.dirpath = self.recipe_dirpath
         self.recipe_results.prefix = "recipe"
+        logger.info(f"Hashed Directory: {self.recipe_dirpath}")
 
         # Add text file outlining dependencies for traceability
         with open(str(self.recipe_dirpath.resolve() / "recipe_dependencies.txt"), "w") as f:

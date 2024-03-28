@@ -88,7 +88,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
             convergence_setup: EME convergence setup
             design_intent: Taper design intent parameters
         recipe_results:
-            length_sweep: Length sweep data (S21, S11) vs. device geometry
+            length_sweeps: Length sweep data (S21, S11) vs. device geometry
             components_settings: Component settings for each device simulated in design recipe
 
     """
@@ -280,7 +280,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         self.length_sweep = opt_length_sweep_data
 
         # Save recipe results
-        self.recipe_results.length_sweep = self.length_sweep
+        self.recipe_results.length_sweeps = length_sweeps
         self.recipe_results.components_settings = [c.settings.model_copy().model_dump() for c in self.components]
 
         return True

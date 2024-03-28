@@ -87,7 +87,7 @@ taper_recipe = RoutingTaperDesignRecipe(cell=taper_cross_section,
                                         fdtd_convergence_setup=fdtd_convergence_setup,
                                         layer_stack=layerstack_lumerical,
                                         dirpath=dirpath)
-
+taper_recipe.override_recipe = False
 success = taper_recipe.eval()
 if success:
     logger.info("Completed taper design recipe.")

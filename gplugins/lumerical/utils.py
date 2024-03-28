@@ -223,9 +223,11 @@ class Results:
         if dirpath is None:
             with open(str(self.dirpath.resolve() / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
+                logger.info(f"Cached results to {self.dirpath} -> {self.prefix}_results.pkl")
         else:
             with open(str(dirpath.resolve() / f"{self.prefix}_results.pkl"), "wb") as f:
                 pickle.dump(self, f)
+                logger.info(f"Cached results to {dirpath} -> {self.prefix}_results.pkl")
 
     def get_pickle(self, dirpath: Path | None = None) -> object:
         """
@@ -243,10 +245,12 @@ class Results:
             with open(str(self.dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 unpickler = PathUnpickler(f)
                 results = unpickler.load()
+                logger.info(f"Recalled results from {self.dirpath} -> {self.prefix}_results.pkl")
         else:
             with open(str(dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 unpickler = PathUnpickler(f)
                 results = unpickler.load()
+                logger.info(f"Recalled results from {dirpath} -> {self.prefix}_results.pkl")
 
         return results
 

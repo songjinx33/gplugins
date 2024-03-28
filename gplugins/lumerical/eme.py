@@ -31,7 +31,7 @@ from gplugins.lumerical.simulation_settings import (
 from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
 
-class LumericalEmeSimulation:
+class LumericalEmeSimulation(Simulation):
     """
     Lumerical EME simulation plugin for running EME simulations on GDSFactory designs
 
