@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import gdsfactory as gf
-import lumapi
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -20,6 +19,7 @@ from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology.layer_stack import LayerStack
 from gdsfactory.typings import PathType
 
+from gplugins.lumerical.config import marker_list, um
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_EME_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalEme,
@@ -28,118 +28,37 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
-
-um = 1e-6
-marker_list = [
-    "o",
-    "v",
-    "^",
-    "<",
-    ">",
-    "1",
-    "2",
-    "3",
-    "4",
-    "s",
-    "p",
-    "P",
-    "*",
-    "h",
-    "+",
-    "X",
-    "D",
-] * 10
+from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
 
 
-def main():
-    from functools import partial
-
-    from gdsfactory.components.taper_cross_section import taper_cross_section
-
-    xs_wg = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=0.5,
-    )
-
-    xs_wg_wide = partial(
-        gf.cross_section.cross_section,
-        layer=(1, 0),
-        width=2.0,
-    )
-
-    taper = taper_cross_section(
-        cross_section1=xs_wg,
-        cross_section2=xs_wg_wide,
-        length=5,
-        width_type="parabolic",
-    )
-
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
-    sim = LumericalEmeSimulation(
-        taper,
-        layer_map,
-        run_mesh_convergence=False,
-        run_cell_convergence=False,
-        run_mode_convergence=False,
-        hide=False,
-    )
-
-    data = sim.get_length_sweep()
-
-    # sim.plot_mode_coupling(1, 10)
-    # sim.plot_length_sweep()
-    # sim.plot_neff_vs_position()
-    print(data)
-    print("done")
-
-
-class LumericalEmeSimulation:
+class LumericalEmeSimulation(Simulation):
     """
-    Lumerical EME simulation
-
-    Set up EME simulation based on component geometry and simulation settings. Optionally, run convergence.
-
-    Parameters:
-        component: Component geometry to simulate
-        material_map: Map of PDK materials to Lumerical materials
-        layerstack: PDK layerstack
-        session: Lumerical session
-        simulation_settings: EME simulation settings
-        convergence_settings: EME convergence settings
-        dirpath: Directory where simulation files are saved
-        hide: Hide simulation if True, else show GUI
-        run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
-        run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
-        run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
+    Lumerical EME simulation plugin for running EME simulations on GDSFactory designs
 
     Attributes:
         component: Component geometry to simulate
-        material_map: Map of PDK materials to Lumerical materials
         layerstack: PDK layerstack
         session: Lumerical session
         simulation_settings: EME simulation settings
         convergence_settings: EME convergence settings
         dirpath: Directory where simulation files are saved
-        mesh_convergence_data: Mesh convergence results
-        cell_convergence_data: Cell convergence results
-        mode_convergence_data: Mode convergence results
+        convergence_results: Dynamic object used to store convergence results
+            simulation_settings: EME simulation settings
+            convergence_settings: EME convergence settings
+            layerstack: PDK layerstack
+            component_hash: Component geometry hash
+            mesh_convergence_data: Mesh convergence results
+            cell_convergence_data: Cell convergence results
+            mode_convergence_data: Mode convergence results
+            overall_convergence_data: Combination of mesh and cell convergence results
 
     """
 
     def __init__(
         self,
         component: Component,
-        material_map: dict[str, str],
         layerstack: LayerStack | None = None,
-        session: lumapi.MODE | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -148,10 +67,29 @@ class LumericalEmeSimulation:
         run_cell_convergence: bool = False,
         run_mode_convergence: bool = False,
         run_overall_convergence: bool = False,
+        override_convergence: bool = False,
         **settings,
     ):
+        """
+        Set up EME simulation based on component geometry and simulation settings. Optionally, run convergence.
+
+        Parameters:
+            component: Component geometry to simulate
+            layerstack: PDK layerstack
+            session: Lumerical session
+            simulation_settings: EME simulation settings
+            convergence_settings: EME convergence settings
+            dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
+                    be where simulation files are saved.
+            hide: Hide simulation if True, else show GUI
+            run_mesh_convergence: If True, run sweep of mesh and monitor sparam convergence.
+            run_cell_convergence: If True, run sweep of number of cells in central group span and monitor sparam convergence.
+            run_mode_convergence: If True, run sweep of number of modes and monitor sparam convergence.
+            run_overall_convergence: If True, run combination of mesh and cell convergence to quicken convergence.
+            override_convergence: Override convergence results and run convergence testing
+        """
         # Set up variables
-        dirpath = dirpath or Path(__file__).resolve().parent
+        dirpath = dirpath or Path(".")
         simulation_settings = dict(simulation_settings)
 
         if hasattr(component.info, "simulation_settings"):
@@ -179,15 +117,56 @@ class LumericalEmeSimulation:
         layerstack = layerstack or get_layer_stack()
 
         # Save instance variables
-        self.component = component
-        self.material_map = material_map
         self.simulation_settings = ss
         self.convergence_settings = convergence_settings
+        self.component = component
         self.layerstack = layerstack
         self.dirpath = dirpath
 
+        # Initialize parent class
+        super().__init__(
+            component=self.component,
+            layerstack=self.layerstack,
+            simulation_settings=self.simulation_settings,
+            convergence_settings=self.convergence_settings,
+            dirpath=self.dirpath,
+        )
+
+        # If convergence data is already available, update simulation settings
+        if (
+            self.convergence_is_fresh()
+            and self.convergence_results.available()
+            and not override_convergence
+        ):
+            try:
+                self.load_convergence_results()
+                # Check if convergence settings, component, and layerstack are the same. If the same, use the simulation settings from file. Else,
+                # run convergence testing by overriding convergence results. This covers any collisions in hashes.
+                if self.is_same_convergence_results():
+                    self.convergence_settings = (
+                        self.convergence_results.convergence_settings
+                    )
+                    self.simulation_settings = (
+                        ss
+                    ) = self.convergence_results.simulation_settings
+                    # Update hash since settings have changed
+                    self.last_hash = hash(self)
+                else:
+                    override_convergence = True
+            except (AttributeError, FileNotFoundError) as err:
+                logger.warning(f"{err}\nRun convergence.")
+                override_convergence = True
+
         # Set up EME simulation based on provided simulation settings
         if not session:
+            try:
+                import lumapi
+            except Exception as e:
+                logger.error(
+                    "Cannot import lumapi (Python Lumerical API). "
+                    "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+                )
+                raise e
             session = lumapi.MODE(hide=hide)
         self.session = session
         s = session
@@ -219,7 +198,9 @@ class LumericalEmeSimulation:
         component_extended_beyond_pml.name = "top"
         gdspath = component_extended_beyond_pml.write_gds()
 
-        process_file_path = layerstack_to_lbr(material_map, layerstack, dirpath)
+        process_file_path = layerstack_to_lbr(
+            ss.material_name_to_lumerical, layerstack, self.simulation_dirpath.resolve()
+        )
 
         # Create device geometry
         draw_geometry(s, gdspath, process_file_path)
@@ -232,7 +213,7 @@ class LumericalEmeSimulation:
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Material {material_name} cannot be found in database, skipping material fit."
                 )
@@ -322,27 +303,50 @@ class LumericalEmeSimulation:
 
         s.set("pml layers", ss.pml_layers)
 
-        s.save(str(dirpath / f"{component.name}.lms"))
+        s.save(str(self.simulation_dirpath.resolve() / f"{component.name}.lms"))
 
-        if run_overall_convergence:
-            if not hide:
-                logger.info("Running overall convergence")
-            self.update_overall_convergence(plot=not hide)
-        else:
-            if run_mesh_convergence:
+        # Run convergence testing if no convergence results are available or user wants to override convergence results
+        # or if setup has changed
+        if (
+            not self.convergence_results.available()
+            or override_convergence
+            or not self.convergence_is_fresh()
+        ):
+            if run_overall_convergence:
                 if not hide:
-                    logger.info("Running mesh convergence.")
-                self.mesh_convergence_data = self.update_mesh_convergence(plot=not hide)
+                    logger.info("Running overall convergence")
+                self.convergence_results.overall_convergence_data = (
+                    self.update_overall_convergence(plot=not hide)
+                )
+            else:
+                if run_mesh_convergence:
+                    if not hide:
+                        logger.info("Running mesh convergence.")
+                    self.convergence_results.mesh_convergence_data = (
+                        self.update_mesh_convergence(plot=not hide)
+                    )
 
-            if run_cell_convergence:
+                if run_cell_convergence:
+                    if not hide:
+                        logger.info("Running cell convergence.")
+                    self.convergence_results.cell_convergence_data = (
+                        self.update_cell_convergence(plot=not hide)
+                    )
+
+            if run_mode_convergence:
                 if not hide:
-                    logger.info("Running cell convergence.")
-                self.cell_convergence_data = self.update_cell_convergence(plot=not hide)
+                    logger.info("Running mode convergence.")
+                self.convergence_results.mode_convergence_data = (
+                    self.update_mode_convergence(plot=not hide)
+                )
 
-        if run_mode_convergence:
-            if not hide:
-                logger.info("Running mode convergence.")
-            self.mode_convergence_data = self.update_mode_convergence(plot=not hide)
+            if (run_overall_convergence and run_mode_convergence) or (
+                run_mesh_convergence and run_cell_convergence and run_mode_convergence
+            ):
+                # Save setup and results for convergence
+                self.save_convergence_results()
+                if not hide:
+                    logger.info("Saved convergence results.")
 
         if not hide:
             plt.show()
@@ -370,7 +374,7 @@ class LumericalEmeSimulation:
             s.switchtolayout()
             s.set("dy", ss.wavelength / ss.mesh_cells_per_wavelength * um)
             s.set("dz", ss.wavelength / ss.mesh_cells_per_wavelength * um)
-            # Get sparams and refine mesh
+            # Get sparams
             s.run()
             s.emepropagate()
             S = s.getresult("EME", "user s matrix")
@@ -378,6 +382,7 @@ class LumericalEmeSimulation:
             s21.append(abs(S[1, 0]) ** 2)
             mesh_cells_per_wavl.append(ss.mesh_cells_per_wavelength)
 
+            # Refine mesh
             ss.mesh_cells_per_wavelength += 1
 
             # Check whether convergence has been reached
@@ -408,14 +413,20 @@ class LumericalEmeSimulation:
             plt.ylabel("Magnitude")
             plt.title(f"Mesh Convergence | Wavelength={ss.wavelength}um")
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_mesh_convergence.png")
+                str(
+                    self.simulation_dirpath.resolve()
+                    / f"{self.component.name}_eme_mesh_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"mesh_cells": mesh_cells_per_wavl, "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_mesh_convergence.csv")
+            str(
+                self.simulation_dirpath.resolve()
+                / f"{self.component.name}_eme_mesh_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -483,14 +494,20 @@ class LumericalEmeSimulation:
             plt.title(f"Cell Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_cell_convergence.png")
+                str(
+                    self.simulation_dirpath.resolve()
+                    / f"{self.component.name}_eme_cell_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"num_cells": list(num_cells[:, 0]), "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_cell_convergence.csv")
+            str(
+                self.simulation_dirpath.resolve()
+                / f"{self.component.name}_eme_cell_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -559,14 +576,20 @@ class LumericalEmeSimulation:
             plt.title(f"Mode Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_mode_convergence.png")
+                str(
+                    self.simulation_dirpath.resolve()
+                    / f"{self.component.name}_eme_mode_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
             {"modes": list(modes), "s21": list(s21), "s11": list(s11)}
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_mode_convergence.csv")
+            str(
+                self.simulation_dirpath.resolve()
+                / f"{self.component.name}_eme_mode_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -669,7 +692,10 @@ class LumericalEmeSimulation:
             plt.title(f"Overall Convergence | Wavelength={ss.wavelength}um")
             plt.tight_layout()
             plt.savefig(
-                str(self.dirpath / f"{self.component.name}_overall_convergence.png")
+                str(
+                    self.simulation_dirpath.resolve()
+                    / f"{self.component.name}_eme_overall_convergence.png"
+                )
             )
 
         convergence_data = pd.DataFrame.from_dict(
@@ -681,7 +707,10 @@ class LumericalEmeSimulation:
             }
         )
         convergence_data.to_csv(
-            str(self.dirpath / f"{self.component.name}_overall_convergence.csv")
+            str(
+                self.simulation_dirpath.resolve()
+                / f"{self.component.name}_eme_overall_convergence.csv"
+            )
         )
         return convergence_data
 
@@ -738,8 +767,19 @@ class LumericalEmeSimulation:
                 "s22": s22,
             }
         )
-        length_sweep.to_csv(
-            str(self.dirpath / f"{self.component.name}_length_sweep.csv")
+
+        length_sweep2 = pd.DataFrame.from_dict(
+            {
+                "length": [L[0] for L in group_span],
+                "s11": list(abs(S["s11"]) ** 2),
+                "s21": list(abs(S["s21"]) ** 2),
+                "s12": list(abs(S["s12"]) ** 2),
+                "s22": list(abs(S["s22"]) ** 2),
+            }
+        )
+
+        length_sweep2.to_csv(
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_length_sweep.csv")
         )
         return length_sweep
 
@@ -775,7 +815,7 @@ class LumericalEmeSimulation:
         plt.ylabel("Magnitude")
         plt.title(f"Length Sweep | Wavelength={self.simulation_settings.wavelength}um")
         plt.tight_layout()
-        plt.savefig(str(self.dirpath / f"{self.component.name}_length_sweep.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_length_sweep.png"))
 
         return fig
 
@@ -918,7 +958,7 @@ class LumericalEmeSimulation:
         self, input_mode: int, max_coupled_mode: int = None, group: int = 1
     ) -> None:
         """
-        Plot mode coupling coefficients from the input_mode to the max_coupled_mode.
+        Plot mode coupling coefficients from the input_mode to the max_coupled_mode vs. position.
         Mode numbers start from 1 (fundamental mode).
 
         Parameters:
@@ -977,13 +1017,13 @@ class LumericalEmeSimulation:
         fig.tight_layout()
 
         fig.savefig(
-            str(self.dirpath / f"{self.component.name}_mode_coupling.png"),
+            str(self.simulation_dirpath.resolve() / f"{self.component.name}_mode_coupling.png"),
             bbox_inches="tight",
         )
 
     def get_neff_vs_position(self, group: int = 1) -> pd.DataFrame:
         """
-        Get effective index vs position along device
+        Get effective index vs position along device for a given cell group
 
         Parameters:
             group: Group of cells to consider. First group is 0.
@@ -1046,8 +1086,4 @@ class LumericalEmeSimulation:
         plt.ylabel("Effective Index")
         plt.legend(loc="upper left", bbox_to_anchor=(1.04, 1))
         plt.tight_layout()
-        plt.savefig(str(self.dirpath / f"{self.component.name}_neff_vs_position.png"))
-
-
-if __name__ == "__main__":
-    main()
+        plt.savefig(str(self.simulation_dirpath.resolve() / f"{self.component.name}_neff_vs_position.png"))

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import gdsfactory as gf
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL
@@ -25,21 +27,12 @@ def test_lumerical_eme_simulation_setup():
         cross_section1=xs_wg, cross_section2=xs_wg_wide, length=5
     )
 
-    layer_map = {
-        "si": "Si (Silicon) - Palik",
-        "sio2": "SiO2 (Glass) - Palik",
-        "sin": "Si3N4 (Silicon Nitride) - Phillip",
-        "TiN": "TiN - Palik",
-        "Aluminum": "Al (Aluminium) Palik",
-    }
-
     sim = LumericalEmeSimulation(
         taper,
-        layer_map,
-        run_mesh_convergence=True,
-        run_cell_convergence=True,
         run_mode_convergence=True,
+        run_overall_convergence=True,
         hide=not DEBUG_LUMERICAL,
+        dirpath=Path(__file__).resolve().parent / "test_runs",
     )
 
     sim.plot_length_sweep()
