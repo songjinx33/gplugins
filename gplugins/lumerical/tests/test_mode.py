@@ -1,6 +1,7 @@
 from gplugins.lumerical.simulation_settings import LUMERICAL_MODE_SIMULATION_SETTINGS
 from gplugins.lumerical.mode import LumericalModeSimulation
 from gplugins.lumerical.config import DEBUG_LUMERICAL
+from pathlib import Path
 
 def test_mode():
     import gdsfactory as gf
@@ -100,7 +101,8 @@ def test_mode():
                                   run_mesh_convergence=True,
                                   run_port_convergence=True,
                                   override_convergence=False,
-                                  hide=DEBUG_LUMERICAL)
+                                  dirpath=Path(__file__).resolve().parent / "test_runs",
+                                  hide=not DEBUG_LUMERICAL)
     sim.plot_index()
     sim.plot_neff_vs_wavelength()
     sim.plot_ng_vs_wavelength()
