@@ -24,17 +24,6 @@ from gplugins.lumerical.utils import (
 from gplugins.lumerical.simulation_settings import LUMERICAL_MODE_SIMULATION_SETTINGS, SimulationSettingsLumericalMode
 from gplugins.lumerical.convergence_settings import LUMERICAL_MODE_CONVERGENCE_SETTINGS, ConvergenceSettingsLumericalMode
 
-try:
-    import lumapi
-except ModuleNotFoundError as e:
-    print(
-        "Cannot import lumapi (Python Lumerical API). "
-        "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
-    )
-    raise e
-except OSError as e:
-    raise e
-
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
 
@@ -166,7 +155,7 @@ class LumericalModeSimulation(Simulation):
     def __init__(self,
         component: Component,
         layerstack: LayerStack | None = None,
-        session: lumapi.MODE | None = None,
+        session: object | None = None,
         simulation_settings: SimulationSettingsLumericalMode = LUMERICAL_MODE_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalMode = LUMERICAL_MODE_CONVERGENCE_SETTINGS,
         dirpath: PathType | None = "",
@@ -175,7 +164,7 @@ class LumericalModeSimulation(Simulation):
         override_convergence: bool = False,
         hide: bool = True,
         **settings,
-    ) -> lumapi.MODE:
+    ):
         """
         Lumerical MODE simulation
 
@@ -255,6 +244,16 @@ class LumericalModeSimulation(Simulation):
 
         # Create MODE simulation
         if not session:
+            try:
+                import lumapi
+            except ModuleNotFoundError as e:
+                print(
+                    "Cannot import lumapi (Python Lumerical API). "
+                    "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+                )
+                raise e
+            except OSError as e:
+                raise e
             self.session = s = lumapi.MODE(hide=hide)
         else:
             self.session = s = session
@@ -318,7 +317,7 @@ class LumericalModeSimulation(Simulation):
                 s.setmaterial(material_name, "wavelength min", ss.wavl_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavl_end * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
-            except lumapi.LumApiError:
+            except Exception:
                 logger.warning(
                     f"Layer {layer_name} material cannot be found in database, skipping material fit."
                 )
