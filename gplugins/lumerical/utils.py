@@ -237,7 +237,7 @@ class Results:
             dirpath: Directory to get pickle file
 
         Returns:
-            RecipeResults as an object with results
+            Results as an object with results
         """
         if isinstance(dirpath, str):
             dirpath = Path(dirpath)
@@ -245,11 +245,15 @@ class Results:
             with open(str(self.dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 unpickler = PathUnpickler(f)
                 results = unpickler.load()
+                if not results.dirpath == self.dirpath:
+                    results.dirpath = self.dirpath
                 logger.info(f"Recalled results from {self.dirpath} -> {self.prefix}_results.pkl")
         else:
             with open(str(dirpath.resolve() / f"{self.prefix}_results.pkl"), "rb") as f:
                 unpickler = PathUnpickler(f)
                 results = unpickler.load()
+                if not results.dirpath == dirpath:
+                    results.dirpath = dirpath
                 logger.info(f"Recalled results from {dirpath} -> {self.prefix}_results.pkl")
 
         return results
