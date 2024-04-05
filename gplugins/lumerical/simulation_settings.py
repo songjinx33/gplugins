@@ -153,7 +153,7 @@ material_name_to_lumerical_ele_therm_default = {
     "cu": "Cu (Copper) - CRC",
     "air": "Air",
     "TiN": "TiN - Palik",
-    "Aluminum": "Al (Aluminium) - Palik",
+    "Aluminum": "Al (Aluminium) - CRC",
 }
 
 
@@ -276,8 +276,8 @@ class SimulationSettingsLumericalCharge(BaseModel):
         solver_mode: CHARGE solver mode
         simulation_temperature: Temperature in K
         temperature_dependence: Set this to have temperature dependent simulation (cross coupling)
-        min_edge_length: Minimum edge length in m for a triangle or tetrahedron mesh
-        max_edge_length: Maximum edge length in m  for a triangle or tetrahedron mesh
+        min_edge_length: Minimum edge length in um for a triangle or tetrahedron mesh
+        max_edge_length: Maximum edge length in um  for a triangle or tetrahedron mesh
         max_refine_steps: Maximum number of vertices that can be added to the mesh at each mesh refinement stage
         min_time_step: Minimum time step in seconds (only for transient simulations)
         max_time_step: Maximum time step in seconds (only for transient simulations)

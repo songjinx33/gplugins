@@ -112,10 +112,10 @@ class LumericalChargeSimulation(Simulation):
         process_file_path = layerstack_to_lbr(
             material_map=combined_material_map,
             layerstack=self.layerstack,
-            dirpath=self.simulation_dirpath,
+            dirpath=self.simulation_dirpath.resolve(),
             use_pdk_material_names=True,
         )
-        gdspath = self.component.write_gds(dirpath=self.simulation_dirpath)
+        gdspath = self.component.write_gds(dirpath=self.simulation_dirpath.resolve())
         draw_geometry(session=s, gdspath=gdspath, process_file_path=process_file_path)
 
         # Add and configure simulation region
@@ -128,7 +128,7 @@ class LumericalChargeSimulation(Simulation):
 
         s.partitionvolume()
 
-        s.save(str(self.simulation_dirpath / f"{self.component.name}.ldev"))
+        s.save(str(self.simulation_dirpath.resolve() / f"{self.component.name}.ldev"))
 
     def add_charge_materials(
         self,
@@ -240,13 +240,13 @@ class LumericalChargeSimulation(Simulation):
 
         s.addchargesolver()
         # Set general settings
-        s.set("norm length", ss.norm_length)
+        s.set("norm length", ss.norm_length * um)
         s.set("solver mode", ss.solver_mode)
         s.set("temperature dependence", ss.temperature_dependence)
         s.set("simulation temperature", ss.simulation_temperature)
         # Set mesh
-        s.set("min edge length", ss.min_edge_length)
-        s.set("max edge length", ss.max_edge_length)
+        s.set("min edge length", ss.min_edge_length * um)
+        s.set("max edge length", ss.max_edge_length * um)
         s.set("max refine steps", ss.max_refine_steps)
         # Set transient simulation settings
         s.set("transient min time step", ss.min_time_step)
@@ -510,5 +510,5 @@ class LumericalChargeSimulation(Simulation):
         s.set("monitor type", ss.dimension)
         s.set("integrate total charge", True)
         s.set("save data", True)
-        s.set("filename", str(self.simulation_dirpath / "charge.mat"))
+        s.set("filename", str(self.simulation_dirpath.resolve() / "charge.mat"))
 
