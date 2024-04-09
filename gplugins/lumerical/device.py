@@ -477,10 +477,10 @@ class LumericalChargeSimulation(Simulation):
                             f"Boundary condition name changed from '{orig_name}' to '{settings['name']}'. Names cannot have +, -, or _ symbols."
                         )
 
-                # Override the boundary condition name while retaining its settings
-                self.boundary_condition_settings[
-                    settings["name"]
-                ] = self.boundary_condition_settings.pop(name)
+                    # Override the boundary condition name while retaining its settings
+                    self.boundary_condition_settings[
+                        settings["name"]
+                    ] = self.boundary_condition_settings.pop(name)
             except Exception as err:
                 logger.warning(
                     f"{err}\nCannot find {name} boundary, skipping settings for this boundary."
@@ -489,7 +489,10 @@ class LumericalChargeSimulation(Simulation):
             for setting, value in settings.items():
                 try:
                     s.set(setting, value)
-                    self.boundary_condition_settings[settings["name"]][setting] = value
+                    if settings.get("name", None):
+                        self.boundary_condition_settings[settings["name"]][setting] = value
+                    else:
+                        self.boundary_condition_settings[name][setting] = value
                 except Exception as err:
                     logger.warning(
                         f"{err}\nCannot find {setting} setting, skipping setting."
