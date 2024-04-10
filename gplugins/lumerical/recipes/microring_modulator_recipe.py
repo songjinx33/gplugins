@@ -17,6 +17,34 @@ from pydantic import BaseModel
 from typing import Literal
 from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
 from gdsfactory.pdk import LayerStack, get_layer_stack
+from gplugins.lumerical.device import LumericalChargeSimulation
+from gplugins.lumerical.simulation_settings import (
+    SimulationSettingsLumericalCharge,
+    LUMERICAL_CHARGE_SIMULATION_SETTINGS,
+    SimulationSettingsLumericalMode,
+    LUMERICAL_MODE_SIMULATION_SETTINGS,
+    SimulationSettingsLumericalFdtd,
+    SIMULATION_SETTINGS_LUMERICAL_FDTD,
+)
+from gplugins.lumerical.convergence_settings import (
+    ConvergenceSettingsLumericalCharge,
+    LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
+    ConvergenceSettingsLumericalMode,
+    LUMERICAL_MODE_CONVERGENCE_SETTINGS,
+    ConvergenceSettingsLumericalFdtd,
+    LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+)
+from gplugins.lumerical.mode import LumericalModeSimulation
+from gplugins.lumerical.config import um
+from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
+from gplugins.lumerical.compact_models import (
+    WAVEGUIDE_COMPACT_MODEL,
+    PHASESHIFTER_COMPACT_MODEL,
+    SPARAM_COMPACT_MODEL,
+)
+from gplugins.lumerical.interconnect import create_compact_model
+from scipy.constants import speed_of_light
+
 
 @gf.cell
 def ring_double_pn_2seg(
@@ -277,19 +305,6 @@ pn_junction_component = c.named_references["rotate_1"].parent
 
 c.show()
 
-from gplugins.lumerical.device import LumericalChargeSimulation
-from gplugins.lumerical.simulation_settings import (
-    SimulationSettingsLumericalCharge,
-    LUMERICAL_CHARGE_SIMULATION_SETTINGS,
-    SimulationSettingsLumericalMode,
-    LUMERICAL_MODE_SIMULATION_SETTINGS,
-)
-from gplugins.lumerical.convergence_settings import (
-    ConvergenceSettingsLumericalCharge,
-    LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
-    ConvergenceSettingsLumericalMode,
-    LUMERICAL_MODE_CONVERGENCE_SETTINGS,
-)
 
 
 class PNJunctionDesignIntent(BaseModel):
@@ -447,10 +462,7 @@ class PNJunctionChargeRecipe(DesignRecipe):
 # pn_charge_recipe.eval()
 
 
-from gplugins.lumerical.mode import LumericalModeSimulation
-from gplugins.lumerical.simulation_settings import SimulationSettingsLumericalMode
-from gplugins.lumerical.convergence_settings import ConvergenceSettingsLumericalMode
-from gplugins.lumerical.config import um
+
 
 mode_settings = SimulationSettingsLumericalMode(injection_axis="2D Y normal",
                                                 wavl_pts=11,
@@ -645,7 +657,116 @@ pn_recipe.eval()
 
 print("Done")
 
+class PNMicroringModulatorRecipe(DesignRecipe):
+    def __init__(
+        self,
+        component: Component | None = None,
+        layer_stack: LayerStack | None = None,
+        pn_design_intent: PNJunctionDesignIntent | None = None,
+        mode_simulation_setup: SimulationSettingsLumericalMode | None = LUMERICAL_MODE_SIMULATION_SETTINGS,
+        mode_convergence_setup: ConvergenceSettingsLumericalMode | None = LUMERICAL_MODE_CONVERGENCE_SETTINGS,
+        charge_simulation_setup: SimulationSettingsLumericalCharge | None = LUMERICAL_CHARGE_SIMULATION_SETTINGS,
+        charge_convergence_setup: ConvergenceSettingsLumericalCharge | None = LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
+        fdtd_simulation_setup: SimulationSettingsLumericalFdtd | None = SIMULATION_SETTINGS_LUMERICAL_FDTD,
+        fdtd_convergence_setup: ConvergenceSettingsLumericalFdtd | None = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+        dependencies: list[DesignRecipe] | None = None,
+        dirpath: Path | None = None,
+    ):
+        # Extract child components (coupler and pn phaseshifter)
+        coupler_component = component.named_references["coupler_ring_1"].parent
+        pn_junction_component = component.named_references["rotate_1"].parent
+        layer_stack = layer_stack or get_layer_stack()
+        dependencies = dependencies or [PNJunctionRecipe(component=pn_junction_component,
+                                         layer_stack=layer_stack,
+                                         design_intent=pn_design_intent,
+                                         mode_simulation_setup=mode_simulation_setup,
+                                         mode_convergence_setup=mode_convergence_setup,
+                                         charge_simulation_setup=charge_simulation_setup,
+                                         charge_convergence_setup=charge_convergence_setup,
+                                         dirpath=dirpath),
+                        FdtdRecipe(component=coupler_component,
+                                   layer_stack=layer_stack,
+                                   simulation_setup=fdtd_simulation_setup,
+                                   convergence_setup=fdtd_convergence_setup,
+                                   dirpath=dirpath)]
 
+        super().__init__(cell=component,
+                         dependencies=dependencies,
+                         layer_stack=layer_stack,
+                         dirpath=dirpath)
+
+        self.recipe_setup.pn_design_intent = pn_design_intent
+        self.recipe_setup.mode_simulation_setup = mode_simulation_setup
+        self.recipe_setup.mode_convergence_setup = mode_convergence_setup
+        self.recipe_setup.charge_simulation_setup = charge_simulation_setup
+        self.recipe_setup.charge_convergence_setup = charge_convergence_setup
+        self.recipe_setup.fdtd_simulation_setup = fdtd_simulation_setup
+        self.recipe_setup.fdtd_convergence_setup = fdtd_convergence_setup
+
+    @eval_decorator
+    def eval(self, run_convergence: bool = True) -> bool:
+        """
+        Run PN microring modulator recipe to characterize microring
+
+        1. Extracts electro-optic characteristics of PN phaseshifter
+        2. Extracts s-parameters of coupler
+        3. Combines phaseshifter and coupler in INTERCONNECT  sim to characterize
+        ring
+
+        Parameters:
+            run_convergence: Run convergence if True
+
+        Returns:
+            success: True if recipe completed properly
+        """
+        pn_recipe = self.dependencies.constituent_recipes[0]
+        coupler_recipe = self.dependencies.constituent_recipes[1]
+
+        # Create waveguide compact model representing PN junction waveguide
+        waveguide_model = WAVEGUIDE_COMPACT_MODEL.model_copy()
+        waveguide_model.settings.update({
+            "ldf filename": str(pn_recipe.recipe_results.waveguide_profile_path.resolve()),
+            "length": self.cell.settings.length_pn,
+        })
+        create_compact_model(model=waveguide_model, dirpath=self.recipe_dirpath)
+
+        # Create phaseshifter compact model
+        ps_model = PHASESHIFTER_COMPACT_MODEL.model_copy()
+        ps_model.settings.update({
+            "frequency": speed_of_light / (self.recipe_setup.mode_simulation_setup.wavl * um),
+            "length": self.cell.settings.length_pn,
+            "load from file": False,
+            "measurement type": "effective index",
+            "measurement": np.array(pn_recipe.recipe_results.neff_vs_voltage),
+        })
+        create_compact_model(model=ps_model, dirpath=self.recipe_dirpath)
+
+        # Create coupler compact model
+        coupler_model = SPARAM_COMPACT_MODEL.model_copy()
+        coupler_model.settings.update({
+            "name": "COUPLER",
+            "s parameters filename": str(coupler_recipe.recipe_results.filepath_dat.resolve()),
+        })
+        create_compact_model(model=coupler_model, dirpath=self.recipe_dirpath)
+
+        # Create ring modulator in INTERCONNECT and extract electro-optic
+        # characteristics
+        import lumapi
+        s = lumapi.INTERCONNECT(hide=False)
+        s.loadcustom(str(self.recipe_dirpath.resolve()))
+
+mrm_recipe = PNMicroringModulatorRecipe(component=c,
+                 layer_stack=layerstack_lumerical,
+                 pn_design_intent=design_intent,
+                 mode_simulation_setup=mode_settings,
+                 mode_convergence_setup=mode_convergence_settings,
+                 charge_simulation_setup=charge_settings,
+                 charge_convergence_setup=charge_convergence_settings,
+                 fdtd_simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+                 fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+                 dirpath=dirpath,
+                )
+mrm_recipe.eval()
 #
 # import lumapi
 #
