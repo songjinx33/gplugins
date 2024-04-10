@@ -55,6 +55,7 @@ class LumericalFdtdSimulation(Simulation):
         dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
                     be where simulation files are saved.
         filepath_npz: S-parameter output filepath (npz)
+        filepath_dat: S-parameter output filepath (dat)
         filepath_fsp: FDTD simulation output filepath (fsp)
         convergence_results: Dynamic object used to store convergence results
             simulation_settings: FDTD simulation settings
@@ -361,14 +362,15 @@ class LumericalFdtdSimulation(Simulation):
         # Fit material models
         for layer_name in layer_stack.to_dict():
             s.select("layer group")
-            material_name = s.getlayer(layer_name, "pattern material")
             try:
+                material_name = s.getlayer(layer_name, "pattern material")
+
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
             except Exception:
                 logger.warning(
-                    f"Material {material_name} cannot be found in database, skipping material fit."
+                    f"Material {layer_name} cannot be found in database, skipping material fit."
                 )
 
         # Get current FDTD region bounds. When adding ports, if the port is outside the FDTD region, correct FDTD bounds
@@ -537,6 +539,7 @@ class LumericalFdtdSimulation(Simulation):
         """
         s = self.session
 
+        self.filepath_dat = self.filepath_npz.with_suffix(".dat")
         filepath = self.filepath_npz.with_suffix(".dat")
         filepath_sim_settings = filepath.with_suffix(".yml")
         filepath_csv = self.filepath_npz.with_suffix(".csv")

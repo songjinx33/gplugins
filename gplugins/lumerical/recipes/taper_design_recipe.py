@@ -458,6 +458,7 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         best_component_index = weighted_score.index(max(weighted_score))
         self.best_component = taper_cross_section(**eme_recipe.recipe_results.components_settings[best_component_index])
         self.recipe_results.cell_settings = self.best_component.to_dict()
+        self.recipe_results.filepath_dat = fdtd_recipes[best_component_index].recipe_results.filepath_dat
 
         return success
 
