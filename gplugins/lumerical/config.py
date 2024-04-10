@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 # Used to display Lumerical GUIs, log status, and plot results
 DEBUG_LUMERICAL = False
 
@@ -42,3 +43,7 @@ marker_list = [
     "X",
     "D",
 ] * 10
+
+COMPACT_MODEL_LIBRARY_PATH = Path("./recipes/compact_model_library")
+if not COMPACT_MODEL_LIBRARY_PATH.resolve().is_dir():
+    COMPACT_MODEL_LIBRARY_PATH.resolve().mkdir(parents=True, exist_ok=True)

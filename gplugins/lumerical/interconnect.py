@@ -6,8 +6,12 @@ from collections import OrderedDict
 
 import numpy as np
 from gdsfactory import Component
-from gdsfactory.config import PATH
+from gdsfactory.config import PATH, logger
 from omegaconf import DictConfig
+
+from pathlib import Path
+from gplugins.lumerical.compact_models import LumericalCompactModel
+from gplugins.lumerical.config import COMPACT_MODEL_LIBRARY_PATH
 
 c = 2.9979e8
 pi = np.pi
@@ -439,6 +443,36 @@ def plot_wavelength_sweep(
 
     if show:
         plt.show()
+
+def create_compact_model(model: LumericalCompactModel | None = None,
+                         session: object | None = None,
+                         dirpath: Path | None = None,
+                         ):
+    """
+    Create compact model and save .ice model to dirpath
+
+    Parameters:
+        session: INTERCONNECT lumapi session
+        model: Model data
+        dirpath: Directory where compact model is saved
+    """
+    dirpath = dirpath or COMPACT_MODEL_LIBRARY_PATH
+
+    try:
+        import lumapi
+    except Exception as e:
+        logger.error(
+            "Cannot import lumapi (Python Lumerical API). "
+            "You can add set the PYTHONPATH variable or add it with `sys.path.append()`"
+        )
+        raise e
+
+    s = lumapi.INTERCONNECT(hide=False) or session
+    # Place compact models in dirpath as .ice models
+    s.cd(str(dirpath.resolve()))
+    s.addelement(model.model, properties=model.settings)
+    s.saveelement(model.settings.get("name", "MODEL"))
+    s.loadcustom(str(dirpath.resolve()))
 
 
 if __name__ == "__main__":
