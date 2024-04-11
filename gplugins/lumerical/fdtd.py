@@ -557,6 +557,7 @@ class LumericalFdtdSimulation(Simulation):
         s.deletesweep("s-parameter sweep")
         s.addsweep(3)
         s.setsweep("s-parameter sweep", "Excite all ports", 1)
+        s.setsweep("s-parameter sweep", "Calculate group delay", 1)
         s.setsweep("S sweep", "auto symmetry", True)
         s.runsweep()
         sp = s.getsweepresult("s-parameter sweep", "S parameters")
@@ -1118,7 +1119,7 @@ class LumericalFdtdSimulation(Simulation):
     def update_field_intensity_threshold(
         self,
         port_modes: dict | None = None,
-        mesh_accuracy: int = 4,
+        mesh_accuracy: int = 3,
         wavl_points: int = 1,
         plot: bool = False,
     ) -> pd.DataFrame:
