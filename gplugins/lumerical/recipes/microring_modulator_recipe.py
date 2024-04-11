@@ -725,16 +725,18 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         # Create waveguide compact model representing PN junction waveguide
         waveguide_model = WAVEGUIDE_COMPACT_MODEL.model_copy()
         waveguide_model.settings.update({
+            "name": "WAVEGUIDE",
             "ldf filename": str(pn_recipe.recipe_results.waveguide_profile_path.resolve()),
-            "length": self.cell.settings.length_pn,
+            "length": self.cell.settings.length_pn * um,
         })
         create_compact_model(model=waveguide_model, dirpath=self.recipe_dirpath)
 
         # Create phaseshifter compact model
         ps_model = PHASESHIFTER_COMPACT_MODEL.model_copy()
         ps_model.settings.update({
+            "name": "PHASESHIFTER",
             "frequency": speed_of_light / (self.recipe_setup.mode_simulation_setup.wavl * um),
-            "length": self.cell.settings.length_pn,
+            "length": self.cell.settings.length_pn * um,
             "load from file": False,
             "measurement type": "effective index",
             "measurement": np.array(pn_recipe.recipe_results.neff_vs_voltage),
@@ -754,6 +756,38 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         import lumapi
         s = lumapi.INTERCONNECT(hide=False)
         s.loadcustom(str(self.recipe_dirpath.resolve()))
+
+        wg1 = s.addelement(f"::custom::{waveguide_model.settings['name'].lower()}")
+        wg2 = s.addelement(f"::custom::{waveguide_model.settings['name'].lower()}")
+        ps1 = s.addelement(f"::custom::{ps_model.settings['name'].lower()}")
+        ps2 = s.addelement(f"::custom::{ps_model.settings['name'].lower()}")
+        cp1 = s.addelement(f"::custom::{coupler_model.settings['name'].lower()}")
+        cp2 = s.addelement(f"::custom::{coupler_model.settings['name'].lower()}")
+        dc1 = s.addelement("DC Source")
+        dc2 = s.addelement("DC Source")
+
+        s.connect(cp1.name, "o3", wg1.name, "port 1")
+        s.connect(wg1.name, "port 2", ps1.name, "port 1")
+        s.connect(ps1.name, "port 2", cp2.name, "o2")
+        s.connect(cp2.name, "o3", wg2.name, "port 1")
+        s.connect(wg2.name, "port 2", ps2.name, "port 1")
+        s.connect(ps2.name, "port 2", cp1.name, "o2")
+
+        s.connect(dc1.name, "output", ps1.name, "modulation")
+        s.connect(dc2.name, "output", ps2.name, "modulation")
+
+        osa = s.addelement("Optical Network Analyzer", properties={
+            "number of input ports": 3,
+            "input parameter": "start and stop",
+            "start frequency": speed_of_light / (self.recipe_setup.fdtd_simulation_setup.wavelength_start * um),
+            "stop frequency": speed_of_light / (self.recipe_setup.fdtd_simulation_setup.wavelength_stop * um),
+            "number of points": self.recipe_setup.fdtd_simulation_setup.wavelength_points,
+        })
+        s.connect(osa.name, "output", cp1.name, "o1")
+        s.connect(osa.name, "input 1", cp1.name, "o4")
+        s.connect(osa.name, "input 2", cp2.name, "o1")
+        s.connect(osa.name, "input 3", cp2.name, "o4")
+        s.save(str(self.recipe_dirpath / f"{self.cell.name}.icp"))
 
 mrm_recipe = PNMicroringModulatorRecipe(component=c,
                  layer_stack=layerstack_lumerical,
