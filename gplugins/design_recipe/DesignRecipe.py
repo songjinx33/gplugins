@@ -138,7 +138,7 @@ class DesignRecipe:
         Parameters:
             force_rerun_all: Forces design recipes to be re-evaluated
         """
-        success = self.eval_dependencies(force_rerun_all)
+        success = self.eval_dependencies(force_rerun_all=force_rerun_all)
 
         self.last_hash = hash(self)
         return success
@@ -155,7 +155,7 @@ class DesignRecipe:
         success = True
         for recipe in self.dependencies:
             if force_rerun_all or (not recipe.is_fresh()):
-                success = success and recipe.eval(force_rerun_all)
+                success = success and recipe.eval()
         return success
 
     def load_recipe_results(self):
