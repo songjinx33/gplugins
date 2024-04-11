@@ -938,7 +938,7 @@ class LumericalFdtdSimulation(Simulation):
         self,
         max_mesh_accuracy: int = 5,
         wavl_points: int = 1,
-        cpu_usage_percent: float = 1,
+        cpu_usage_percent: float = 0.4,
         min_cpus_per_sim: int = 8,
         delete_fsp_files: bool = False,
         verbose: bool = False,
@@ -1121,6 +1121,8 @@ class LumericalFdtdSimulation(Simulation):
         port_modes: dict | None = None,
         mesh_accuracy: int = 3,
         wavl_points: int = 1,
+        cpu_usage_percent: float = 0.4,
+        min_cpus_per_sim: int = 8,
         plot: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1143,6 +1145,17 @@ class LumericalFdtdSimulation(Simulation):
         s = self.session
         ss = self.simulation_settings
         cs = self.convergence_settings
+
+        # Set resources
+        total_cpus = multiprocessing.cpu_count()
+        cpus_free = int(np.floor(total_cpus * cpu_usage_percent))
+        capacity = int(np.floor(cpus_free / min_cpus_per_sim)) or 1
+        cpus_per_sim = min_cpus_per_sim if capacity > 1 else cpus_free
+        s.setresource("FDTD", 1, "processes", cpus_per_sim)
+        s.setresource("FDTD", 1, "capacity", capacity)
+        logger.info(
+            f"Using {cpus_per_sim} cores per simulation with {capacity} simulations running simultaneously."
+        )
 
         # Save original sim settings
         orig_mesh_accuracy = s.getnamed("FDTD", "mesh accuracy")
