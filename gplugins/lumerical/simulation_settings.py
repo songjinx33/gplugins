@@ -258,7 +258,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     field_profile_samples: int = 15
     distance_monitors_to_pml: float = 0.5
     material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
-    port_field_intensity_threshold: float = 1e-5
+    port_field_intensity_threshold: float = 1e-6
 
     class Config:
         """pydantic basemodel config."""
