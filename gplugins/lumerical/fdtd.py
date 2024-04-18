@@ -560,6 +560,7 @@ class LumericalFdtdSimulation(Simulation):
         s.setsweep("s-parameter sweep", "Calculate group delay", 1)
         s.setsweep("S sweep", "auto symmetry", True)
         s.runsweep()
+        s.loadsweep()
         sp = s.getsweepresult("s-parameter sweep", "S parameters")
         s.exportsweep("s-parameter sweep", str(filepath.absolute()))
         logger.info(f"Writing Sparameters to {str(filepath.absolute())!r}")
