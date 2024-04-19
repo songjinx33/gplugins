@@ -25,6 +25,8 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_MODE_SIMULATION_SETTINGS,
     SimulationSettingsLumericalFdtd,
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
+    SimulationSettingsLumericalInterconnect,
+    LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
 )
 from gplugins.lumerical.convergence_settings import (
     ConvergenceSettingsLumericalCharge,
@@ -44,6 +46,7 @@ from gplugins.lumerical.compact_models import (
 )
 from gplugins.lumerical.interconnect import create_compact_model
 from scipy.constants import speed_of_light
+import matplotlib.pyplot as plt
 
 
 @gf.cell
@@ -669,6 +672,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         charge_convergence_setup: ConvergenceSettingsLumericalCharge | None = LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
         fdtd_simulation_setup: SimulationSettingsLumericalFdtd | None = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         fdtd_convergence_setup: ConvergenceSettingsLumericalFdtd | None = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+        interconnect_simulation_setup: SimulationSettingsLumericalInterconnect | None = LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
         dependencies: list[DesignRecipe] | None = None,
         dirpath: Path | None = None,
     ):
@@ -702,6 +706,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         self.recipe_setup.charge_convergence_setup = charge_convergence_setup
         self.recipe_setup.fdtd_simulation_setup = fdtd_simulation_setup
         self.recipe_setup.fdtd_convergence_setup = fdtd_convergence_setup
+        self.recipe_setup.interconnect_simulation_setup = interconnect_simulation_setup
 
     @eval_decorator
     def eval(self, run_convergence: bool = True) -> bool:
@@ -751,7 +756,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         })
         create_compact_model(model=coupler_model, dirpath=self.recipe_dirpath)
 
-        # Create ring modulator in INTERCONNECT and extract electro-optic
+        # Create ring modulator in INTERCONNECT
         # characteristics
         import lumapi
         s = lumapi.INTERCONNECT(hide=False)
@@ -779,15 +784,177 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         osa = s.addelement("Optical Network Analyzer", properties={
             "number of input ports": 3,
             "input parameter": "start and stop",
-            "start frequency": speed_of_light / (self.recipe_setup.fdtd_simulation_setup.wavelength_start * um),
-            "stop frequency": speed_of_light / (self.recipe_setup.fdtd_simulation_setup.wavelength_stop * um),
-            "number of points": self.recipe_setup.fdtd_simulation_setup.wavelength_points,
+            "start frequency": speed_of_light / (self.recipe_setup.interconnect_simulation_setup.wavl_start * um),
+            "stop frequency": speed_of_light / (self.recipe_setup.interconnect_simulation_setup.wavl_end * um),
+            "number of points": self.recipe_setup.interconnect_simulation_setup.wavl_pts,
         })
         s.connect(osa.name, "output", cp1.name, "o1")
         s.connect(osa.name, "input 1", cp1.name, "o4")
         s.connect(osa.name, "input 2", cp2.name, "o1")
         s.connect(osa.name, "input 3", cp2.name, "o4")
         s.save(str(self.recipe_dirpath / f"{self.cell.name}.icp"))
+        self.interconnect_session = s
+
+        # Run simulation and extract static response MRM figures of merit
+        s.run()
+        s.select(osa.name)
+
+        # Get THRU port response
+        data = s.getresult(osa.name, "input 1/mode 1/gain")
+        self.recipe_results.thru_port_data = pd.DataFrame({"wavelength": data["wavelength"][:,0] / um,
+                                  "gain": data["mode 1 gain (dB)"]})
+
+        # Get DROP port response
+        data = s.getresult(osa.name, "input 3/mode 1/gain")
+        self.recipe_results.drop_port_data = pd.DataFrame({"wavelength": data["wavelength"][:, 0] / um,
+                                  "gain": data["mode 1 gain (dB)"]})
+
+        # Get ADD port response
+        data = s.getresult(osa.name, "input 2/mode 1/gain")
+        self.recipe_results.add_port_data = pd.DataFrame(
+            {"wavelength": data["wavelength"][:, 0] / um,
+             "gain": data["mode 1 gain (dB)"]})
+
+        self.recipe_results.free_spectral_range = get_free_spectral_range(wavelength=list(self.recipe_results.thru_port_data.loc[:,"wavelength"]),
+                                                                          power=list(self.recipe_results.thru_port_data.loc[:,"gain"]),
+                                                                          peaks_flipped=True)
+        self.recipe_results.resonances = get_resonances(wavelength=list(self.recipe_results.thru_port_data.loc[:,"wavelength"]),
+                                                      power=list(self.recipe_results.thru_port_data.loc[:,"gain"]),
+                                                      peaks_flipped=True)
+
+
+        # Sweep voltage bias and view resonance change
+        voltages = np.linspace(self.recipe_setup.pn_design_intent.voltage_start,
+                               self.recipe_setup.pn_design_intent.voltage_stop,
+                               self.recipe_setup.pn_design_intent.voltage_pts)
+        spectrums = []
+        wavelength_resonances = []
+        power_resonances = []
+        for voltage in voltages:
+            s.switchtodesign()
+            s.setnamed(dc1.name, "amplitude", voltage)
+            s.setnamed(dc2.name, "amplitude", voltage)
+            s.run()
+
+            # Get optical spectrum and resonances
+            data = s.getresult(osa.name, "input 1/mode 1/gain")
+            spectrums.append(pd.DataFrame({
+                "wavelength": data["wavelength"][:, 0] / um,
+                "gain": data["mode 1 gain (dB)"],
+            }))
+            resonance = get_resonances(wavelength=list(data["wavelength"][:, 0] / um),
+                                          power=list(data["mode 1 gain (dB)"]),
+                                          peaks_flipped=True)
+            wavelength_resonances.append(list(resonance.loc[:, "resonant_wavelength"]))
+            power_resonances.append(list(resonance.loc[:, "resonant_power"]))
+
+        self.recipe_results.spectrum_vs_voltage = pd.DataFrame({"spectrum": spectrums,
+                                                                "voltage": voltages})
+        self.recipe_results.resonance_vs_voltage = pd.DataFrame({"wavelength_resonances": wavelength_resonances,
+                                                                 "power_resonances": power_resonances,
+                                                                 "voltage": voltages})
+
+        return True
+
+
+
+
+
+
+
+
+
+
+
+from scipy.signal import find_peaks
+def get_resonances(wavelength: list,
+                        power: list,
+                        peaks_flipped: bool = False,
+                        prominence: float = 0.5,
+                        width: float = 1e-3,
+                        ) -> pd.DataFrame:
+    """
+    Get resonance wavelengths and powers
+
+    Parameters:
+        wavelength: Wavelengths (um)
+        power: Optical power (dBm)
+        peaks_flipped: True if resonances are dips rather than peaks
+        prominence: Height or optical power in respect to surroundings of a peak
+            to be considered a resonance. (dBm)
+        width: Minimum width between resonances. (um)
+
+    Returns:
+         Dataframe with resonance wavelengths and powers
+         | resonant_wavelength | resonant_power |
+         | float               | float          |
+    """
+    power = np.array(power)
+    wavelength = np.array(wavelength)
+
+    power_copy = power.copy()
+    if peaks_flipped:
+        power_copy = -power_copy
+
+    peaks, _ = find_peaks(power_copy, prominence=prominence, width=width)
+
+    # Extracting wavelengths for the identified peaks
+    peak_wavelengths = wavelength[peaks]
+    peak_powers = power[peaks]
+
+    return pd.DataFrame({"resonant_wavelength": peak_wavelengths,
+                         "resonant_power": peak_powers,
+                         })
+
+def get_free_spectral_range(wavelength: list,
+                            power: list,
+                            peaks_flipped: bool = False,
+                            prominence=0.5,
+                            width=1e-3
+                            ) -> pd.DataFrame:
+    """
+    Get free spectral ranges (FSR) across a spectrum of resonances
+
+
+                │
+                │                   FSR
+                │          ◄──────────────────►
+      Optical   │          .                  .
+       Power    │        .   .              . ▲ .
+       (dBm)    │      .       .          .   │   .
+                │    .           .      .     │     .
+                │....             ......      │      .......
+                └─────────────────────────────│────────────── Wavelength
+                                         peak_wavelength
+                                     (used to calculate FSR)
+
+
+    Parameters:
+        wavelength: Wavelengths (um)
+        power: Optical power (dBm)
+        peaks_flipped: True if resonances are dips rather than peaks
+        prominence: Height or optical power in respect to surroundings of a peak
+            to be considered a resonance. (dBm)
+        width: Minimum width between resonances. (um)
+
+    Returns:
+        Dataframe with FSRs calculated at peak_wavelengths
+        | peak_wavelength | FSR   |
+        | float           | float |
+        | (um)            | (um)  |
+    """
+    data = get_resonances(wavelength=wavelength,
+                          power=power,
+                          peaks_flipped=peaks_flipped,
+                          prominence=prominence,
+                          width=width)
+    fsrs = abs(np.diff(data.loc[:, "resonant_wavelength"]))
+
+    return pd.DataFrame({"peak_wavelength": data.loc[:, "resonant_wavelength"][:-1],
+                         "FSR": fsrs})
+
+
+
 
 mrm_recipe = PNMicroringModulatorRecipe(component=c,
                  layer_stack=layerstack_lumerical,
@@ -798,8 +965,10 @@ mrm_recipe = PNMicroringModulatorRecipe(component=c,
                  charge_convergence_setup=charge_convergence_settings,
                  fdtd_simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
                  fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+                 interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
                  dirpath=dirpath,
                 )
+mrm_recipe.override_recipe = True
 mrm_recipe.eval()
 #
 # import lumapi

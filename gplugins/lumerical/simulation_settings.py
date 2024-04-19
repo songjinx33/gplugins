@@ -459,3 +459,21 @@ class SimulationSettingsLumericalMode(BaseModel):
         arbitrary_types_allowed = True
 
 LUMERICAL_MODE_SIMULATION_SETTINGS = SimulationSettingsLumericalMode()
+
+class SimulationSettingsLumericalInterconnect(BaseModel):
+    """
+    Lumerical INTERCONNECT simulation settings.
+
+    Parameters:
+        wavl_start: Start wavelength (um)
+        wavl_end: End wavelength (um)
+        wavl_pts: Number of wavelength points
+    """
+    wavl_start: float = 1.5
+    wavl_end: float = 1.6
+    wavl_pts: int = 1e5
+
+    class Config:
+        arbitrary_types_allowed = True
+
+LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS = SimulationSettingsLumericalInterconnect()

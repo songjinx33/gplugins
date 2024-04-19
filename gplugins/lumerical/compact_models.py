@@ -51,6 +51,8 @@ OPTICAL_NPORT_SPARAM_SETTINGS = OrderedDict({
     "name": "SPARAM",
     "load from file": True,
     "s parameters filename": "",
+    "passivity": "ignore",
+    "reciprocity": "ignore",
 })
 
 class LumericalCompactModel(BaseModel):
