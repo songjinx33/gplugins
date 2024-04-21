@@ -1,20 +1,15 @@
 
-from gdsfactory.components.coupler_ring import coupler_ring
-from gdsfactory.components.bend_circular import bend_circular
+
 from pathlib import Path
-import gdsfactory as gf
-from functools import partial
+
 import numpy as np
 import pandas as pd
-from gdsfactory.cross_section import strip
-from gdsfactory.cross_section import Section
-from gdsfactory.cross_section import pn, rib
-from gdsfactory.components.straight import straight
+
 from gdsfactory.component import Component
-from gdsfactory.typings import CrossSectionFactory
+
 from gdsfactory.config import logger
 from pydantic import BaseModel
-from typing import Literal
+
 from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gplugins.lumerical.device import LumericalChargeSimulation
@@ -37,6 +32,11 @@ from gplugins.lumerical.convergence_settings import (
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
 )
 from gplugins.lumerical.mode import LumericalModeSimulation
+from gplugins.lumerical.interconnect import (
+    get_resonances,
+    get_free_spectral_range,
+    create_compact_model,
+)
 from gplugins.lumerical.config import um
 from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
 from gplugins.lumerical.compact_models import (
@@ -44,270 +44,7 @@ from gplugins.lumerical.compact_models import (
     PHASESHIFTER_COMPACT_MODEL,
     SPARAM_COMPACT_MODEL,
 )
-from gplugins.lumerical.interconnect import create_compact_model
 from scipy.constants import speed_of_light
-import matplotlib.pyplot as plt
-
-
-@gf.cell
-def ring_double_pn_2seg(
-    add_gap: float = 0.6,
-    drop_gap: float = 0.6,
-    radius: float = 15.0,
-    length_coupling: float = 0.0,
-    length_pn: float = 25.0,
-    waveguide_cross_section: CrossSectionFactory = rib,
-    pn_cross_section: CrossSectionFactory = pn,
-) -> Component:
-    """Double bus ring modulator with 2 segments of PN junction phaseshifters.
-
-    Args:
-        width: width of the ridge in um.
-        add_gap: gap to add waveguide.
-        drop_gap: gap to drop waveguide.
-        radius: bend radius for coupler
-        offset_low_doping: from center to junction center.
-        gap_low_doping: from waveguide center to low doping. Only used for PIN.
-        gap_medium_doping: from waveguide center to medium doping. None removes it.
-        gap_high_doping: from center to high doping. None removes it.
-        length_coupling: length of coupling region
-        length_pn: length of PN junction phaseshifters
-        waveguide_cross_section: waveguide cross section
-        pn_cross_section: PN junction cross section
-
-    """
-    c = gf.Component()
-
-    # Create couplers
-    drop_coupler = coupler_ring(gap=drop_gap,
-                            radius=radius,
-                            length_x=length_coupling,
-                            bend=bend_circular,
-                            length_extension=0,
-                            cross_section=waveguide_cross_section,
-                            )
-    add_coupler = coupler_ring(gap=add_gap,
-                                radius=radius,
-                                length_x=length_coupling,
-                                bend=bend_circular,
-                                length_extension=0,
-                                cross_section=waveguide_cross_section,
-                                )
-
-    ref_drop_coupler = c.add_ref(drop_coupler)
-    ref_add_coupler = c.add_ref(add_coupler)
-
-    # Shift device such that 0,0 is at port o1 (bottom left)
-    ref_drop_coupler.movex(radius)
-    ref_add_coupler.movex(-radius)
-
-    # Create PN phase shifters
-    pn_junction = partial(straight,
-                          cross_section=pn_cross_section,
-                          length=length_pn)
-
-    phase_shifter1 = pn_junction()
-    ps1 = phase_shifter1.rotate(90)
-    ref_ps1 = c.add_ref(ps1)
-    ref_ps1.x = ref_drop_coupler.ports["o2"].center[0]
-    ref_ps1.ymin = ref_drop_coupler.ports["o2"].center[1]
-
-    ref_ps2 = c.add_ref(ps1)
-    ref_ps2.rotate(180)
-    ref_ps2.x = ref_drop_coupler.ports["o3"].center[0]
-    ref_ps2.ymin = ref_drop_coupler.ports["o3"].center[1]
-
-    # Place add coupler above the PN phase shifters
-    ref_add_coupler.rotate(180)
-    ref_add_coupler.ymin = ref_ps1.ymax
-
-    # Add ports to component
-    c.add_port("o1", port=ref_drop_coupler["o1"])
-    c.add_port("o2", port=ref_drop_coupler["o4"])
-    c.add_port("o3", port=ref_add_coupler["o1"])
-    c.add_port("o4", port=ref_add_coupler["o4"])
-    c.auto_rename_ports()
-
-    return c
-
-
-### 0. DEFINE WHERE FILES ARE SAVED
-dirpath = Path("../recipes/recipe_runs")
-dirpath.mkdir(parents=True, exist_ok=True)
-
-### 1. DEFINE DESIGN INTENT
-width_ridge = 0.45
-width_slab=5.45
-width_contact = 1.0
-
-waveguide_layer = (1,0)
-metal_layer = (40, 0)
-
-radius = 15
-ring_gap = 0.6
-
-offset_low_doping=-0.065
-gap_medium_doping=0.595
-gap_high_doping=0.595 + 0.055
-
-nm = 1e-9
-rib = partial(
-    strip,
-    width=width_ridge,
-    sections=(Section(width=width_slab, layer="SLAB90", name="slab90"),),
-    radius=radius,
-)
-
-pn_contacts = partial(pn, width=width_ridge,
-                          offset_low_doping=offset_low_doping,
-                          gap_medium_doping=gap_medium_doping,
-                          gap_high_doping=gap_high_doping,
-                          width_slab=width_slab,
-                          sections=(Section(width=width_contact,
-                                            offset=(width_slab - width_contact) / 2,
-                                            layer=waveguide_layer),
-                                    Section(width=width_contact,
-                                            offset=-(width_slab - width_contact) / 2,
-                                            layer=waveguide_layer),
-                                    Section(width=width_contact,
-                                            offset=(width_slab - width_contact) / 2,
-                                            layer=metal_layer),
-                                    Section(width=width_contact,
-                                            offset=-(width_slab - width_contact) / 2,
-                                            layer=metal_layer),
-                                    ))
-
-### 2. DEFINE LAYER STACK
-from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
-from gdsfactory.generic_tech.layer_map import LAYER
-
-layerstack_lumerical = LayerStack(
-    layers={
-        "clad": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "box": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=-3.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "core": LayerLevel(
-            layer=(1, 0),
-            thickness=0.155,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "slab90": LayerLevel(
-            layer=(3, 0),
-            thickness=0.05,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "N": LayerLevel(
-            layer=LAYER.N,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=5e17,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NP": LayerLevel(
-            layer=LAYER.NP,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=3e18,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NPP": LayerLevel(
-            layer=LAYER.NPP,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=1e19,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "P": LayerLevel(
-            layer=LAYER.P,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=7e17,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PP": LayerLevel(
-            layer=LAYER.PP,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=2e18,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PPP": LayerLevel(
-            layer=LAYER.PPP,
-            thickness=0.155/2,
-            zmin=0.155,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=1e19,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "via": LayerLevel(
-            layer=LAYER.VIAC,
-            thickness=1.0,
-            zmin=0.155,
-            material="Aluminum",
-            mesh_order=4,
-            orientation="100",
-            layer_type="grow",
-        ),
-    }
-)
-c = ring_double_pn_2seg(pn_cross_section=pn_contacts,
-                        waveguide_cross_section=rib)
-
-coupler_component = c.named_references["coupler_ring_1"].parent
-pn_junction_component = c.named_references["rotate_1"].parent
-
-c.show()
-
 
 
 class PNJunctionDesignIntent(BaseModel):
@@ -330,18 +67,6 @@ class PNJunctionDesignIntent(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-
-
-
-
-design_intent = PNJunctionDesignIntent()
-
-charge_settings = SimulationSettingsLumericalCharge(x=pn_junction_component.x,
-                                                    y=pn_junction_component.y,
-                                                    dimension="2D Y-Normal",
-                                                    xspan=width_slab + 1.0)
-charge_convergence_settings = ConvergenceSettingsLumericalCharge(global_iteration_limit=500,
-                                                                 gradient_mixing="fast")
 
 class PNJunctionChargeRecipe(DesignRecipe):
     """
@@ -455,32 +180,6 @@ class PNJunctionChargeRecipe(DesignRecipe):
                                                                        "resistance_ohm_cm": list(R),
                                                                        "bandwidth_GHz": list(BW)})
         return True
-
-# pn_charge_recipe = PNJunctionChargeRecipe(component=pn_junction_component,
-#                              layer_stack=layerstack_lumerical,
-#                              design_intent=design_intent,
-#                              simulation_setup=charge_settings,
-#                              convergence_setup=charge_convergence_settings,
-#                              dirpath=dirpath)
-# pn_charge_recipe.eval()
-
-
-
-
-mode_settings = SimulationSettingsLumericalMode(injection_axis="2D Y normal",
-                                                wavl_pts=11,
-                                                x=charge_settings.x,
-                                                y=charge_settings.y,
-                                                z=charge_settings.z,
-                                                xspan=charge_settings.xspan,
-                                                yspan=charge_settings.yspan,
-                                                zspan=charge_settings.zspan,
-                                                target_mode=3
-                                                )
-mode_convergence_settings = ConvergenceSettingsLumericalMode()
-
-# Create MODE simulation
-
 
 
 class PNJunctionRecipe(DesignRecipe):
@@ -646,19 +345,6 @@ class PNJunctionRecipe(DesignRecipe):
                                                             "loss_dB_per_cm": list(loss_dB_per_cm)})
 
         return True
-
-pn_recipe = PNJunctionRecipe(component=pn_junction_component,
-                 layer_stack=layerstack_lumerical,
-                 design_intent=design_intent,
-                 mode_simulation_setup=mode_settings,
-                 mode_convergence_setup=mode_convergence_settings,
-                 charge_simulation_setup=charge_settings,
-                 charge_convergence_setup=charge_convergence_settings,
-                 dirpath=dirpath,
-                 )
-pn_recipe.eval()
-
-print("Done")
 
 class PNMicroringModulatorRecipe(DesignRecipe):
     def __init__(
@@ -855,144 +541,4 @@ class PNMicroringModulatorRecipe(DesignRecipe):
                                                                  "voltage": voltages})
 
         return True
-
-
-
-
-
-
-
-
-
-
-
-from scipy.signal import find_peaks
-def get_resonances(wavelength: list,
-                        power: list,
-                        peaks_flipped: bool = False,
-                        prominence: float = 0.5,
-                        width: float = 1e-3,
-                        ) -> pd.DataFrame:
-    """
-    Get resonance wavelengths and powers
-
-    Parameters:
-        wavelength: Wavelengths (um)
-        power: Optical power (dBm)
-        peaks_flipped: True if resonances are dips rather than peaks
-        prominence: Height or optical power in respect to surroundings of a peak
-            to be considered a resonance. (dBm)
-        width: Minimum width between resonances. (um)
-
-    Returns:
-         Dataframe with resonance wavelengths and powers
-         | resonant_wavelength | resonant_power |
-         | float               | float          |
-    """
-    power = np.array(power)
-    wavelength = np.array(wavelength)
-
-    power_copy = power.copy()
-    if peaks_flipped:
-        power_copy = -power_copy
-
-    peaks, _ = find_peaks(power_copy, prominence=prominence, width=width)
-
-    # Extracting wavelengths for the identified peaks
-    peak_wavelengths = wavelength[peaks]
-    peak_powers = power[peaks]
-
-    return pd.DataFrame({"resonant_wavelength": peak_wavelengths,
-                         "resonant_power": peak_powers,
-                         })
-
-def get_free_spectral_range(wavelength: list,
-                            power: list,
-                            peaks_flipped: bool = False,
-                            prominence=0.5,
-                            width=1e-3
-                            ) -> pd.DataFrame:
-    """
-    Get free spectral ranges (FSR) across a spectrum of resonances
-
-
-                │
-                │                   FSR
-                │          ◄──────────────────►
-      Optical   │          .                  .
-       Power    │        .   .              . ▲ .
-       (dBm)    │      .       .          .   │   .
-                │    .           .      .     │     .
-                │....             ......      │      .......
-                └─────────────────────────────│────────────── Wavelength
-                                         peak_wavelength
-                                     (used to calculate FSR)
-
-
-    Parameters:
-        wavelength: Wavelengths (um)
-        power: Optical power (dBm)
-        peaks_flipped: True if resonances are dips rather than peaks
-        prominence: Height or optical power in respect to surroundings of a peak
-            to be considered a resonance. (dBm)
-        width: Minimum width between resonances. (um)
-
-    Returns:
-        Dataframe with FSRs calculated at peak_wavelengths
-        | peak_wavelength | FSR   |
-        | float           | float |
-        | (um)            | (um)  |
-    """
-    data = get_resonances(wavelength=wavelength,
-                          power=power,
-                          peaks_flipped=peaks_flipped,
-                          prominence=prominence,
-                          width=width)
-    fsrs = abs(np.diff(data.loc[:, "resonant_wavelength"]))
-
-    return pd.DataFrame({"peak_wavelength": data.loc[:, "resonant_wavelength"][:-1],
-                         "FSR": fsrs})
-
-
-
-
-mrm_recipe = PNMicroringModulatorRecipe(component=c,
-                 layer_stack=layerstack_lumerical,
-                 pn_design_intent=design_intent,
-                 mode_simulation_setup=mode_settings,
-                 mode_convergence_setup=mode_convergence_settings,
-                 charge_simulation_setup=charge_settings,
-                 charge_convergence_setup=charge_convergence_settings,
-                 fdtd_simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-                 fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-                 interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
-                 dirpath=dirpath,
-                )
-mrm_recipe.override_recipe = True
-mrm_recipe.eval()
-#
-# import lumapi
-#
-# data = pd.DataFrame([[0, 0, 0],
-# [1.11111, 3.1511e-05, -1.88599e-06],
-# [2.22222, 5.77673e-05, -3.47821e-06],
-# [3.33333, 8.05975e-05, -4.8639e-06],
-# [4.44444, 0.000100747, -6.07648e-06],
-# [5.55556, 0.000119181, -7.19313e-06],
-# [6.66667, 0.000136481, -8.25009e-06],
-# [7.77778, 0.000152736, -9.2406e-06],
-# [8.88889, 0.000167833, -1.01482e-05],
-# [10, 0.000181674, -1.09838e-05]], columns=["voltage", "neff_r", "neff_i"])
-#
-# ldf_path = Path("./waveguide.ldf")
-#
-# s = lumapi.INTERCONNECT(hide=False)
-# s.addelement("Optical Modulator Measured")
-# s.set("measurement type", "effective index")
-# s.set("load from file", False)
-# s.set("frequency", s.c()/1550e-9)
-# s.set("length", 1e-6)
-# s.set("input parameter", "table")
-# s.set("measurement", np.array(data))
-# print("Done")
 
