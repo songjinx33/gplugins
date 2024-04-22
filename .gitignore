@@ -13,11 +13,7 @@ docs/notebooks/batch-*
 *.fsp
 *.hdf5
 *.msh
-*.dat
 *.gds
-*.pkl
-*.txt
-*.csv
 *.html
 test-data/
 _autosummary/
