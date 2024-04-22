@@ -21,23 +21,15 @@ from gplugins.lumerical.recipes.microring_modulator_recipe import (
 )
 from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalCharge,
-    LUMERICAL_CHARGE_SIMULATION_SETTINGS,
     SimulationSettingsLumericalMode,
-    LUMERICAL_MODE_SIMULATION_SETTINGS,
-    SimulationSettingsLumericalFdtd,
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
-    SimulationSettingsLumericalInterconnect,
     LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
 )
 from gplugins.lumerical.convergence_settings import (
     ConvergenceSettingsLumericalCharge,
-    LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalMode,
-    LUMERICAL_MODE_CONVERGENCE_SETTINGS,
-    ConvergenceSettingsLumericalFdtd,
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
 )
-from gplugins.lumerical.config import nm
 
 @gf.cell
 def ring_double_pn_2seg(
