@@ -48,7 +48,7 @@ def ring_double_pn_2seg(
 
 
                     Top View of Double Bus Ring Modulator
-              ADD   ────────────────────────────────────  DROP
+              DROP  ────────────────────────────────────  ADD
               PORT  ────────────────────────────────────  PORT
                                                  ▲
                               length_coupling    │ add_gap

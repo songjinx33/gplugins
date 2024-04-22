@@ -371,7 +371,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
     characteristics of the MRM.
 
                         Top View of Double Bus Ring Modulator
-              ADD   ────────────────────────────────────  DROP
+              DROP  ────────────────────────────────────  ADD
               PORT  ────────────────────────────────────  PORT
                                   ────────
                                 /   ────   \
