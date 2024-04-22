@@ -78,7 +78,12 @@ class PNJunctionChargeRecipe(DesignRecipe):
             convergence_setup: CHARGE convergence setup
             design_intent: PN junction design intent
         recipe_results:
-
+            charge_profile_path: Path to charge profile file (.mat)
+            ac_voltage: Small signal AC voltage used to characterize AC response
+            frequency: Small signal frequency used to characterize AC response
+            electrical_characteristics: Electrical characteristics of junction,
+                including voltage bias vs. impedance, capacitance, resistance,
+                bandwidth.
     """
     def __init__(
         self,
@@ -105,6 +110,8 @@ class PNJunctionChargeRecipe(DesignRecipe):
         Run PN junction recipe
 
         1. Sweep PN junction voltage and extract charge profile
+        2. Sweep PN junction voltage and extract AC response and electrical
+            characteristics
 
         Parameters:
             run_convergence: Run convergence if True
@@ -184,14 +191,26 @@ class PNJunctionChargeRecipe(DesignRecipe):
 
 class PNJunctionRecipe(DesignRecipe):
     """
-    PN junction MODE recipe.
+    PN junction recipe that includes optical (MODE) and electrical (CHARGE)
+    analysis.
 
     Attributes:
         recipe_setup:
-            simulation_setup: MODE simulation setup
-            convergence_setup: MODE convergence setup
+            mode_simulation_setup: MODE simulation setup
+            mode_convergence_setup: MODE convergence setup
+            charge_simulation_setup: CHARGE simulation setup
+            charge_convergence_setup: CHARGE convergence setup
             design_intent: PN junction design intent
         recipe_results:
+            charge_profile_path: Path to charge profile file (.mat)
+            ac_voltage: Small signal AC voltage used to characterize AC response
+            frequency: Small signal frequency used to characterize AC response
+            electrical_characteristics: Electrical characteristics of junction,
+                including voltage bias vs. impedance, capacitance, resistance,
+                bandwidth.
+            waveguide_profile_path: Path to MODE waveguide profile (waveguide.ldf)
+            neff_vs_voltage: Effective index vs. voltage
+            phase_loss_vs_voltage: Phase and loss per cm vs. voltage
 
     """
     def __init__(
@@ -347,6 +366,51 @@ class PNJunctionRecipe(DesignRecipe):
         return True
 
 class PNMicroringModulatorRecipe(DesignRecipe):
+    """
+    PN microring modulator (MRM) recipe used to characterize optical and electrical
+    characteristics of the MRM.
+
+                        Top View of Double Bus Ring Modulator
+              ADD   ────────────────────────────────────  DROP
+              PORT  ────────────────────────────────────  PORT
+                                  ────────
+                                /   ────   \
+                               /  /      \  \
+                              /  /        \  \
+                             /  /          \  \
+                            │  │            │  │
+                            │  │            │  │
+                            │  │            │  │
+                            │  │            │  │
+                            │  │            │  │
+                             \  \          /  /
+                              \  \        /  /
+                               \  \      /  /
+                                \   ────   /
+                                  ────────
+              IN    ────────────────────────────────────  THRU
+             PORT   ────────────────────────────────────  PORT
+
+    Attributes:
+        recipe_setup:
+            pn_design_intent: PN junction design intent
+            mode_simulation_setup: MODE simulation setup
+            mode_convergence_setup: MODE convergence setup
+            charge_simulation_setup: CHARGE simulation setup
+            charge_convergence_setup: CHARGE convergence setup
+            fdtd_simulation_setup: FDTD simulation setup
+            fdtd_convergence_setup: FDTD convergence setup
+            interconnect_simulation_setup: INTERCONNECT simulation setup
+        recipe_results:
+            thru_port_data: THRU port optical response
+            drop_port_data: DROP port optical response
+            add_port_data: ADD port optical response
+            free_spectral_range: Free spectral range calculated across wavelength range
+            resonances: Resonance wavelengths and powers across wavelength range
+            spectrum_vs_voltage: Optical spectrum vs. applied voltage on PN phaseshifters
+            resonance_vs_voltage: Resonance wavelengths and powers vs. applied voltage
+                on PN phaseshifters
+    """
     def __init__(
         self,
         component: Component | None = None,

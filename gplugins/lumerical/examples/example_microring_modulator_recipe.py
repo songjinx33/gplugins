@@ -56,8 +56,8 @@ def ring_double_pn_2seg(
 
 
                     Top View of Double Bus Ring Modulator
-                    ────────────────────────────────────
-                    ────────────────────────────────────
+              ADD   ────────────────────────────────────  DROP
+              PORT  ────────────────────────────────────  PORT
                                                  ▲
                               length_coupling    │ add_gap
                                   <------>       ▼
@@ -79,8 +79,8 @@ def ring_double_pn_2seg(
                                   <------>       ▲
                               length_coupling    │ thru_gap
                                                  ▼
-                    ────────────────────────────────────
-                    ────────────────────────────────────
+              IN    ────────────────────────────────────  THRU
+             PORT   ────────────────────────────────────  PORT
 
     Args:
         add_gap: gap to add waveguide.
