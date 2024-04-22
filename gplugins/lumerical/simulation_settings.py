@@ -248,7 +248,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     port_extension: float = 5.0
     port_translation: float = 0.0
     material_fit_tolerance: float = 0.001
-    mesh_accuracy: int = 1
+    mesh_accuracy: int = 4
     wavelength_start: float = 1.5
     wavelength_stop: float = 1.6
     wavelength_points: int = 200
