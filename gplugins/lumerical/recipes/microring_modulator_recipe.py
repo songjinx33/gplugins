@@ -587,13 +587,15 @@ class PNMicroringModulatorRecipe(DesignRecipe):
             s.run()
 
             # Get optical spectrum and resonances
-            data = s.getresult(osa.name, "input 1/mode 1/gain")
+            data1 = s.getresult(osa.name, "input 1/mode 1/gain")
+            data2 = s.getresult(osa.name, "input 3/mode 1/gain")
             spectrums.append(pd.DataFrame({
-                "wavelength": data["wavelength"][:, 0] / um,
-                "gain": data["mode 1 gain (dB)"],
+                "wavelength": data1["wavelength"][:, 0] / um,
+                "thru": data1["mode 1 gain (dB)"],
+                "drop": data2["mode 1 gain (dB)"]
             }))
-            resonance = get_resonances(wavelength=list(data["wavelength"][:, 0] / um),
-                                          power=list(data["mode 1 gain (dB)"]),
+            resonance = get_resonances(wavelength=list(data1["wavelength"][:, 0] / um),
+                                          power=list(data1["mode 1 gain (dB)"]),
                                           peaks_flipped=True)
             wavelength_resonances.append(list(resonance.loc[:, "resonant_wavelength"]))
             power_resonances.append(list(resonance.loc[:, "resonant_power"]))
