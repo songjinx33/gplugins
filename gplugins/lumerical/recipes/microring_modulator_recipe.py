@@ -226,12 +226,12 @@ class PNJunctionRecipe(DesignRecipe):
         dirpath: Path | None = None,
     ):
         layer_stack = layer_stack or get_layer_stack()
-        dependencies = [PNJunctionChargeRecipe(component=component,
+        dependencies = dependencies or [PNJunctionChargeRecipe(component=component,
                                                layer_stack=layer_stack,
                                                design_intent=design_intent,
                                                simulation_setup=charge_simulation_setup,
                                                convergence_setup=charge_convergence_setup,
-                                               dirpath=dirpath)] or dependencies
+                                               dirpath=dirpath)]
         super().__init__(cell=component, layer_stack=layer_stack,
                          dirpath=dirpath, dependencies=dependencies)
         # Add information to recipe setup. NOTE: This is used for hashing
@@ -326,11 +326,21 @@ class PNJunctionRecipe(DesignRecipe):
         s.addsweepresult("sweep", res2)
         s.save()
 
+        # Get voltage index when voltage is 0V and use this point to calibrate the phase
+        # and loss change. At 0V, zero phase and loss change should occur.
+        voltages = np.linspace(self.recipe_setup.design_intent.voltage_start,
+                               self.recipe_setup.design_intent.voltage_stop,
+                               self.recipe_setup.design_intent.voltage_pts)
+        index_at_zero_volt = np.argmin(np.abs(voltages))
+
+        # Set base waveguide model to 0V bias
+        s.setnamed("::model::np density", f"V_{self.recipe_setup.design_intent.contact2_name}_index", index_at_zero_volt + 1)
+
         # Run MODE sim
         s.mesh()
         s.findmodes()
 
-        s.selectmode(self.recipe_setup.mode_simulation_setup.target_mode);
+        s.selectmode(self.recipe_setup.mode_simulation_setup.target_mode)
         s.setanalysis('track selected mode', 1);
         s.setanalysis('number of points', self.recipe_setup.mode_simulation_setup.wavl_pts);
         s.setanalysis('number of test modes', self.recipe_setup.mode_simulation_setup.num_modes);
@@ -355,7 +365,7 @@ class PNJunctionRecipe(DesignRecipe):
                                                             "neff_r": list(np.real(neff[:,0])),
                                                             "neff_i": list(np.imag(neff[:,0]))})
 
-        dneff_per_cm = np.real(neff[:,0] - neff[0]) * \
+        dneff_per_cm = np.real(neff[:,0] - neff[index_at_zero_volt]) * \
                 2 / (self.recipe_setup.mode_simulation_setup.wavl * um) * 1e-2
         loss_dB_per_cm = -.20 * np.log10(np.exp(-2 * np.pi * np.imag(neff[:,0]) /
                                                 (self.recipe_setup.mode_simulation_setup.wavl * um)))
