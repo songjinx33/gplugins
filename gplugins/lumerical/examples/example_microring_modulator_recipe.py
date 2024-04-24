@@ -11,6 +11,7 @@ from gdsfactory.cross_section import (
 )
 from gdsfactory.typings import CrossSectionFactory
 from gdsfactory.component import Component
+from gdsfactory.config import logger
 from pathlib import Path
 from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 from gdsfactory.generic_tech.layer_map import LAYER
@@ -387,3 +388,139 @@ mrm_recipe = PNMicroringModulatorRecipe(component=c,
                 )
 mrm_recipe.override_recipe = False
 mrm_recipe.eval()
+
+
+# Set up packages
+import numpy as np
+import pandas as pd
+import matplotlib as mpl
+from gplugins.lumerical.config import marker_list
+from gplugins.lumerical.interconnect import get_free_spectral_range, get_resonances
+mpl.use("Qt5Agg")
+import matplotlib.pyplot as plt
+
+# Get experimental results
+exp_dirpath = Path("./experimental_results")
+
+optical_spectrum_weight_bank = pd.read_csv(str(exp_dirpath.resolve() / "optical_spectrum_weight_bank.csv"), index_col=0)
+optical_spectrum_resonance_vs_voltage = pd.read_csv(str(exp_dirpath.resolve() / "optical_spectrum_resonance_vs_voltage.csv"), index_col=0)
+resonance_shift = pd.read_csv(str(exp_dirpath.resolve() / "resonance_shift.csv"), index_col=0)
+
+fsr_data = get_free_spectral_range(wavelength=list(optical_spectrum_weight_bank.loc[:, "wavelength"]),
+                              power=list(10*np.log10(optical_spectrum_weight_bank.loc[:, "drop"])),
+                                   prominence=5)
+
+start_resonance = 3
+exp_fsr = (fsr_data.loc[start_resonance + 4,"peak_wavelength"] - fsr_data.loc[start_resonance,"peak_wavelength"]) * 1e-3
+sim_fsr = mrm_recipe.recipe_results.free_spectral_range
+
+# Fit calibration spectrum to experimental data
+coefficients = np.polyfit(optical_spectrum_weight_bank.loc[:,"wavelength"],
+                          10*np.log10(optical_spectrum_weight_bank.loc[:,"thru"]),
+                          2)
+
+p = np.poly1d(coefficients)
+power_fit = p(optical_spectrum_weight_bank.loc[:,"wavelength"])
+
+# Plot weight bank spectrum
+fig1 = plt.figure()
+plt.plot(optical_spectrum_weight_bank.loc[:,"wavelength"],
+         10*np.log10(optical_spectrum_weight_bank.loc[:,"thru"]) - power_fit,
+         marker=marker_list[0],
+         label="Experimental - THRU")
+plt.plot(optical_spectrum_weight_bank.loc[:,"wavelength"],
+         10*np.log10(optical_spectrum_weight_bank.loc[:,"drop"]) - power_fit,
+         marker=marker_list[1],
+         label="Experimental - DROP")
+# plt.plot(optical_spectrum_weight_bank.loc[:,"wavelength"],
+#          power_fit,
+#          marker=marker_list[4],
+#          label="Experimental - Calibration Fit")
+plt.plot(mrm_recipe.recipe_results.thru_port_data.loc[:,"wavelength"] * 1e3,
+         mrm_recipe.recipe_results.thru_port_data.loc[:,"gain"],
+         marker=marker_list[2],
+         label="Simulation - THRU")
+plt.plot(mrm_recipe.recipe_results.drop_port_data.loc[:,"wavelength"] * 1e3,
+         mrm_recipe.recipe_results.drop_port_data.loc[:,"gain"],
+         marker=marker_list[3],
+         label="Simulation - DROP")
+plt.xlim([min(optical_spectrum_weight_bank.loc[:,"wavelength"]), max(optical_spectrum_weight_bank.loc[:,"wavelength"])])
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Power (dBm)")
+plt.title("1x4 MRM Spectra")
+plt.grid("on")
+plt.legend()
+
+
+# Plot optical spectrum vs voltage applied
+fig2 = plt.figure()
+i = 0
+for name in optical_spectrum_resonance_vs_voltage.columns:
+    if "wavelength" in name:
+        voltage = name.split("_")[-1]
+        plt.plot(optical_spectrum_resonance_vs_voltage.loc[:,name],
+                 optical_spectrum_resonance_vs_voltage.loc[:,voltage],
+                 label=f"Experimental - {voltage}",
+                 marker=marker_list[i])
+        i+=1
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Power (dB)")
+plt.title("Peak 3")
+plt.grid("on")
+plt.legend()
+
+# Plot wavelength and power shifts
+fig3, (ax1, ax2) = plt.subplots(1,2)
+ax1.plot(resonance_shift.loc[:,"voltage"],
+         resonance_shift.loc[:,"wavelength_shift"],
+         marker=marker_list[0],
+         label="Experimental")
+ax1.set_xlabel("Voltage (V)")
+ax1.set_ylabel("Wavelength Shift (nm)")
+ax1.set_title("Wavelength Shift")
+ax1.legend()
+ax1.grid(True)
+
+ax2.plot(resonance_shift.loc[:,"voltage"],
+         resonance_shift.loc[:,"power_shift"],
+         marker=marker_list[0],
+         label="Experimental")
+ax2.set_xlabel("Voltage (V)")
+ax2.set_ylabel("Power Shift (dB)")
+ax2.set_title("Power Shift")
+ax2.legend()
+ax2.grid(True)
+
+# Get resonance shift from simulation
+wavl_range = [1.572, 1.576]
+sub_spectrums = []
+sim_wavelength_resonances = []
+sim_power_resonances = []
+for i in range(0, len(mrm_recipe.recipe_results.spectrum_vs_voltage.loc[:,"spectrum"])):
+    spectrum = mrm_recipe.recipe_results.spectrum_vs_voltage.loc[i,"spectrum"]
+    sub_spectrums.append(spectrum[(spectrum["wavelength"] >= wavl_range[0]) & (spectrum["wavelength"] <= wavl_range[1])])
+    resonances = get_resonances(wavelength=list(sub_spectrums[-1].loc[:,"wavelength"]),
+                                power=list(sub_spectrums[-1].loc[:,"drop"]))
+    sim_wavelength_resonances.append(resonances.loc[0, "resonant_wavelength"])
+    sim_power_resonances.append(resonances.loc[0, "resonant_power"])
+
+sim_wavelength_resonances = np.array(sim_wavelength_resonances)
+sim_power_resonances = np.array(sim_power_resonances)
+norm_sim_wavelength_resonances = sim_wavelength_resonances - sim_wavelength_resonances[0]
+norm_sim_power_resonances = sim_power_resonances - sim_power_resonances[0]
+
+ax1.plot(mrm_recipe.recipe_results.spectrum_vs_voltage.loc[:,"voltage"],
+         norm_sim_wavelength_resonances * 1e3,
+         marker=marker_list[1],
+         label="Simulation",
+         )
+ax2.plot(mrm_recipe.recipe_results.spectrum_vs_voltage.loc[:,"voltage"],
+         norm_sim_power_resonances,
+         marker=marker_list[1],
+         label="Simulation",
+         )
+
+plt.show()
+
+logger.info("Done")
