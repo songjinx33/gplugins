@@ -359,7 +359,6 @@ class LumericalModeSimulation(Simulation):
             plt.grid("on")
             plt.legend()
             plt.savefig(str(self.simulation_dirpath.resolve() / "mesh_convergence.png"))
-            plt.show()
 
         convergence_results = pd.DataFrame(
             {
@@ -657,7 +656,6 @@ class LumericalModeSimulation(Simulation):
             plt.grid("on")
             plt.legend()
             plt.savefig(str(self.simulation_dirpath.resolve() / "efield_intensity_threshold_convergence.png"))
-            plt.show()
 
         convergence_results = pd.DataFrame(
             {
