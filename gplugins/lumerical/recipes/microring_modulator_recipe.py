@@ -365,6 +365,10 @@ class PNJunctionRecipe(DesignRecipe):
                                                             "neff_r": list(np.real(neff[:,0])),
                                                             "neff_i": list(np.imag(neff[:,0]))})
 
+        self.recipe_results.delta_neff_vs_voltage = pd.DataFrame({"voltage": list(V),
+                                                                "neff_r": list(np.real(neff[:,0] - neff[index_at_zero_volt,0])),
+                                                                "neff_i": list(np.imag(neff[:,0] - neff[index_at_zero_volt,0]))})
+
         dneff_per_cm = np.real(neff[:,0] - neff[index_at_zero_volt]) * \
                 2 / (self.recipe_setup.mode_simulation_setup.wavl * um) * 1e-2
         loss_dB_per_cm = -.20 * np.log10(np.exp(-2 * np.pi * np.imag(neff[:,0]) /
@@ -439,7 +443,9 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         # Extract child components (coupler and pn phaseshifter)
         coupler_component = component.named_references["coupler_ring_1"].parent
         pn_junction_component = component.named_references["rotate_1"].parent
+        # Set defaults
         layer_stack = layer_stack or get_layer_stack()
+        pn_design_intent = pn_design_intent or PNJunctionDesignIntent()
         dependencies = dependencies or [PNJunctionRecipe(component=pn_junction_component,
                                          layer_stack=layer_stack,
                                          design_intent=pn_design_intent,
@@ -495,6 +501,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
             "length": self.cell.settings.length_pn * um,
         })
         create_compact_model(model=waveguide_model, dirpath=self.recipe_dirpath)
+        self.recipe_results.waveguide_model_settings = waveguide_model
 
         # Create phaseshifter compact model
         ps_model = PHASESHIFTER_COMPACT_MODEL.model_copy()
@@ -504,9 +511,10 @@ class PNMicroringModulatorRecipe(DesignRecipe):
             "length": self.cell.settings.length_pn * um,
             "load from file": False,
             "measurement type": "effective index",
-            "measurement": np.array(pn_recipe.recipe_results.neff_vs_voltage),
+            "measurement": np.array(pn_recipe.recipe_results.delta_neff_vs_voltage),
         })
         create_compact_model(model=ps_model, dirpath=self.recipe_dirpath)
+        self.recipe_results.phaseshifter_model_settings = ps_model
 
         # Create coupler compact model
         coupler_model = SPARAM_COMPACT_MODEL.model_copy()
@@ -515,6 +523,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
             "s parameters filename": str(coupler_recipe.recipe_results.filepath_dat.resolve()),
         })
         create_compact_model(model=coupler_model, dirpath=self.recipe_dirpath)
+        self.recipe_results.coupler_model_settings = coupler_model
 
         # Create ring modulator in INTERCONNECT
         # characteristics
