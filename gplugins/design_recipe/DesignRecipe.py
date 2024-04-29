@@ -235,9 +235,12 @@ def eval_decorator(func):
             and self.is_fresh()
         ):
             # Load results if available
-            self.load_recipe_results()
+            try:
+                self.load_recipe_results()
+            except:
+                self.override_recipe = True
 
-            if not self.is_same_recipe_results():
+            if not self.is_same_recipe_results() or self.override_recipe:
                 # If the recipe setup is not the same as in the results, eval the design recipe
                 success = success and func(*args, **kwargs)
                 self.save_recipe_results()
