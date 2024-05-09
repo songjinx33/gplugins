@@ -244,24 +244,24 @@ design_intent = pn_design_intent=PNJunctionDesignIntent(voltage_start=-0.8,
 
 width_slab = 5.45
 rings = {
-    # "ring1": {
-    #         "component_settings": {
-    #             "length_pn": 25.0
-    #         },
-    #         "cross_section_settings": {
-    #             "width_ridge": 0.442,
-    #             "width_slab": width_slab,
-    #         }
-    #     },
-    # "ring2": {
-    #     "component_settings": {
-    #         "length_pn": 25.05
-    #     },
-    #     "cross_section_settings": {
-    #         "width_ridge": 0.446,
-    #         "width_slab": width_slab,
-    #     }
-    # },
+    "ring1": {
+            "component_settings": {
+                "length_pn": 25.0
+            },
+            "cross_section_settings": {
+                "width_ridge": 0.442,
+                "width_slab": width_slab,
+            }
+        },
+    "ring2": {
+        "component_settings": {
+            "length_pn": 25.05
+        },
+        "cross_section_settings": {
+            "width_ridge": 0.446,
+            "width_slab": width_slab,
+        }
+    },
     "ring3": {
         "component_settings": {
             "length_pn": 25.1
@@ -271,15 +271,15 @@ rings = {
             "width_slab": width_slab,
         }
     },
-    # "ring4": {
-    #     "component_settings": {
-    #         "length_pn": 25.15
-    #     },
-    #     "cross_section_settings": {
-    #         "width_ridge": 0.444,
-    #         "width_slab": width_slab,
-    #     }
-    # },
+    "ring4": {
+        "component_settings": {
+            "length_pn": 25.15
+        },
+        "cross_section_settings": {
+            "width_ridge": 0.442,
+            "width_slab": width_slab,
+        }
+    },
 }
 
 ring_components = [ring_double_pn_2seg(pn_cross_section=get_pn_cross_section(**ring_settings["cross_section_settings"]),
@@ -316,7 +316,7 @@ dopant_concentration_sets = {
     "carrier_fine_tune4": [1.6e18, 1e19, 1e20, 1.6e18, 1e19, 1e20],
     "carrier_fine_tune5": [1.2e18, 1e19, 1e20, 2e18, 1e19, 1e20],
 }
-set = "carrier_fine_tune3"
+set = "carrier_fine_tune2"
 
 n = dopant_concentration_sets[set][0]
 
@@ -681,7 +681,7 @@ mpl.use("Qt5Agg")
 import matplotlib.pyplot as plt
 
 # Selects which ring to analyze from simulations
-ring_index = 0
+ring_index = 2
 
 # Get experimental results
 exp_dirpath = Path("./experimental_results")
