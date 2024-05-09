@@ -32,15 +32,6 @@ from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
 layerstack_lumerical = LayerStack(
     layers={
-        "clad": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
         "box": LayerLevel(
             layer=(99999, 0),
             thickness=3.0,
@@ -74,7 +65,7 @@ fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
     sparam_diff=0.01
 )
 fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-    mesh_accuracy=2, port_translation=1.0, port_field_intensity_threshold=1e-6,
+    mesh_accuracy=4, port_translation=1.0, port_field_intensity_threshold=1e-5,
 )
 
 taper_recipe = RoutingTaperDesignRecipe(cell=taper_cross_section,
