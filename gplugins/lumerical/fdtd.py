@@ -305,7 +305,7 @@ class LumericalFdtdSimulation(Simulation):
         # Define filepaths
         self.filepath_npz = get_sparameters_path(
             component=component,
-            dirpath=self.simulation_dirpath.resolve(),
+            dirpath=self.simulation_dirpath,
             layer_stack=layer_stack,
             **settings,
         )
