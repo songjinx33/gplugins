@@ -249,7 +249,7 @@ rings = {
                 "length_pn": 25.0
             },
             "cross_section_settings": {
-                "width_ridge": 0.442,
+                "width_ridge": 0.44,
                 "width_slab": width_slab,
             }
         },
