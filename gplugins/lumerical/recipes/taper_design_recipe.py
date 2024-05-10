@@ -182,6 +182,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         simulated_components = []
         sims = []
         length_sweeps = []
+        mode_coupling = []
         for component in components:
             try:
                 sim = LumericalEmeSimulation(
@@ -201,6 +202,10 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
                     f"{err}\n{component.name} failed to simulate. Moving onto next component"
                 )
                 continue
+
+            # Get mode coupling from fundamental to higher order modes
+            coupling_coefficients = sim.get_mode_coupling(input_mode=1, max_coupled_mode=ss.num_modes)
+            mode_coupling.append(coupling_coefficients)
 
             # Extract S21 and S11 vs. length during length sweeps
             length_sweep = sim.get_length_sweep(
@@ -280,6 +285,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         self.length_sweep = opt_length_sweep_data
 
         # Save recipe results
+        self.recipe_results.mode_coupling = mode_coupling
         self.recipe_results.length_sweeps = length_sweeps
         self.recipe_results.components_settings = [c.settings.model_copy().model_dump() for c in self.components]
 
