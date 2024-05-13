@@ -27,6 +27,71 @@ from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalFdtd,
 )
 
+def grillot_strip_waveguide_loss_model() -> pd.DataFrame:
+    width = np.array([ 137.5000,
+              150.0000,
+              162.5000,
+              175.0000,
+              187.5000,
+              200.0000,
+              212.5000,
+              225.0000,
+              237.5000,
+              250.0000,
+              262.5000,
+              275.0000,
+              287.5000,
+              300.0000,
+              312.5000,
+              325.0000,
+              337.5000,
+              350.0000,
+              362.5000,
+              375.0000,
+              387.5000,
+              400.0000,
+              412.5000,
+              425.0000,
+              437.5000,
+              450.0000,
+              462.5000,
+              475.0000,
+              487.5000,
+              500.0000]) * 1e-9 * 1e6
+    loss_dB_per_cm = [  0.0267,
+                        0.0023,
+                        0.9541,
+                        1.5325,
+                        2.0779,
+                        2.6538,
+                        3.1668,
+                        3.6792,
+                        4.1707,
+                        4.6104,
+                        4.9203,
+                        5.1621,
+                        5.3037,
+                        5.3702,
+                        5.3557,
+                        5.2944,
+                        5.1943,
+                        5.0667,
+                        4.9265,
+                        4.7774,
+                        4.6247,
+                        4.4683,
+                        4.3213,
+                        4.1766,
+                        4.0366,
+                        3.8989,
+                        3.7741,
+                        3.6527,
+                        3.5369,
+                        3.4243]
+    return pd.DataFrame({"width": width,
+                         "loss": loss_dB_per_cm})
+
+
 class RoutingTaperDesignIntent(BaseModel):
     r"""
     Design intent for routing taper design recipe
@@ -104,6 +169,8 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         cross_section1: CrossSectionSpec | None = gf.cross_section.cross_section,
         cross_section2: CrossSectionSpec | None = gf.cross_section.cross_section,
         design_intent: RoutingTaperDesignIntent | None = None,
+        waveguide_loss_model: pd.DataFrame | None = None,
+        additional_loss: float = 0.0,
         layer_stack: LayerStack | None = None,
         simulation_setup: SimulationSettingsLumericalEme
         | None = LUMERICAL_EME_SIMULATION_SETTINGS,
@@ -131,6 +198,10 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
             cross_section1: Left cross section
             cross_section2: Right cross section
             design_intent: Taper design intent
+            waveguide_loss_model: Waveguide propagation loss  (dB/cm) vs. waveguide width (um)
+                                    | width | loss  |
+                                    | float | float |
+            additional_loss: Constant additional loss in dB (can be from substrate leakage loss, material loss, etc.)
             layer_stack: PDK layerstack
             simulation_setup: EME simulation setup
             convergence_setup: EME convergence setup
@@ -144,6 +215,10 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         self.recipe_setup.simulation_setup = simulation_setup
         self.recipe_setup.convergence_setup = convergence_setup
         self.recipe_setup.design_intent = design_intent or RoutingTaperDesignIntent()
+        if isinstance(waveguide_loss_model, pd.DataFrame) and not waveguide_loss_model.empty:
+            self.recipe_setup.waveguide_loss_model = waveguide_loss_model
+        if additional_loss:
+            self.recipe_setup.additional_loss = additional_loss
 
     @eval_decorator
     def eval(self, run_convergence: bool = True):
@@ -164,12 +239,14 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         cs = self.recipe_setup.convergence_setup
         di = self.recipe_setup.design_intent
 
+        eme_device_length = 5 # um
+
         # Sweep geometry
         components = [
             self.cell(
                 cross_section1=self.cross_section1,
                 cross_section2=self.cross_section2,
-                length=5,  # um
+                length=eme_device_length,  # um
                 width_type=wtype,
             )
             for wtype in typing.get_args(WidthTypes)
@@ -213,10 +290,40 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
                 stop_length=di.stop_length,
                 num_pts=di.num_pts,
             )
-            length_sweeps.append(length_sweep)
+
+            # Include waveguide loss model and additional loss if available in length_sweep
+            propagation_loss = [0]*di.num_pts
+            if hasattr(self.recipe_setup, "waveguide_loss_model"):
+                wlm = self.recipe_setup.waveguide_loss_model
+
+                pts = component.polygons[0].points
+                # Iterate in coordinates from input of taper to end of taper and average the width between two points
+                # Then, calculate loss for normalized length of device
+                normalized_loss = 0
+                for i in range(0, np.argmin(np.abs(pts[:, 0] - eme_device_length))):
+                    width = np.abs(pts[i, 1] + pts[i + 1, 1])
+                    length = np.abs(pts[i, 0] - pts[i + 1, 0]) * um / cm
+
+                    loss_db_per_cm = np.interp(width, wlm.loc[:, "width"], wlm.loc[:, "loss"])
+                    normalized_loss += loss_db_per_cm * length
+
+                for i in range(0, len(length_sweep.loc[:, "length"])):
+                    propagation_loss.append(normalized_loss / eme_device_length * length_sweep.loc[i, "length"] / um)
+
+            if hasattr(self.recipe_setup, "additional_loss"):
+                for i in range(0, len(propagation_loss)):
+                    propagation_loss[i] += self.recipe_setup.additional_loss
+
+            # Get transmission and reflection values
             length = length_sweep.loc[:, "length"]
             s21 = 10 * np.log10(abs(length_sweep.loc[:, "s21"]) ** 2)
             s11 = 10 * np.log10(abs(length_sweep.loc[:, "s11"]) ** 2)
+
+            # Update length sweep with propagation loss
+            s21 -= np.array(propagation_loss)
+            length_sweep.loc[:, "s21"] = 10 ** (s21 / 20)
+
+            length_sweeps.append(length_sweep)
 
             # Get length of taper that has lower loss than routing loss
             try:
@@ -317,6 +424,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         cross_section1: CrossSectionSpec | None = gf.cross_section.cross_section,
         cross_section2: CrossSectionSpec | None = gf.cross_section.cross_section,
         design_intent: RoutingTaperDesignIntent | None = None,
+        waveguide_loss_model: pd.DataFrame | None = None,
+        additional_loss: float = 0.0,
         eme_simulation_setup: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         eme_convergence_setup: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
         fdtd_simulation_setup: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
@@ -344,6 +453,10 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             cross_section1: Left cross section
             cross_section2: Right cross section
             design_intent: Taper design intent
+            waveguide_loss_model: Waveguide propagation loss (dB/cm) vs. waveguide width (um)
+                                    | width | loss  |
+                                    | float | float |
+            additional_loss: Constant additional loss in dB (can be from substrate leakage loss, material loss, etc.)
             layer_stack: PDK layerstack
             eme_simulation_setup: EME simulation setup
             eme_convergence_setup: EME convergence setup
@@ -361,6 +474,10 @@ class RoutingTaperDesignRecipe(DesignRecipe):
         self.recipe_setup.fdtd_simulation_setup = fdtd_simulation_setup
         self.recipe_setup.fdtd_convergence_setup = fdtd_convergence_setup
         self.recipe_setup.design_intent = design_intent or RoutingTaperDesignIntent()
+        if isinstance(waveguide_loss_model, pd.DataFrame) and not waveguide_loss_model.empty:
+            self.recipe_setup.waveguide_loss_model = waveguide_loss_model
+        if additional_loss:
+            self.recipe_setup.additional_loss = additional_loss
 
 
     @eval_decorator
@@ -383,6 +500,8 @@ class RoutingTaperDesignRecipe(DesignRecipe):
             cross_section1=self.cross_section1,
             cross_section2=self.cross_section2,
             design_intent=self.recipe_setup.design_intent,
+            waveguide_loss_model=self.recipe_setup.waveguide_loss_model if hasattr(self.recipe_setup, "waveguide_loss_model") else None,
+            additional_loss=self.recipe_setup.additional_loss if hasattr(self.recipe_setup, "additional_loss") else 0.0,
             layer_stack=self.recipe_setup.layer_stack,
             simulation_setup=self.recipe_setup.eme_simulation_setup,
             convergence_setup=self.recipe_setup.eme_convergence_setup,
