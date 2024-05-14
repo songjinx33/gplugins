@@ -145,8 +145,8 @@ def grillot_strip_waveguide_loss_model(neff_vs_width: pd.DataFrame,
 
     Returns:
         Loss in dB/cm vs. width (um)
-        | loss_dB_per_cm | width |
-        | float          | float |
+        | loss  | width |
+        | float | float |
     """
 
     neff_r = np.real(neff_vs_width.loc[:, "neff"])
@@ -176,4 +176,4 @@ def grillot_strip_waveguide_loss_model(neff_vs_width: pd.DataFrame,
         loss_dB_per_cm.append(4.34 * ((sigma ** 2) / (2 * np.pi * k0 * np.sqrt(2) * (d ** 4) * n_core)) * g * f)
 
     return pd.DataFrame({"width": neff_vs_width.loc[:, "width"],
-                         "loss_dB_per_cm": loss_dB_per_cm})
+                         "loss": loss_dB_per_cm})

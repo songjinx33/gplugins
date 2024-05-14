@@ -193,7 +193,6 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
         transmission_coefficients = []
         reflection_coefficients = []
         simulated_components = []
-        sims = []
         length_sweeps = []
         mode_coupling = []
         for component in components:
@@ -208,7 +207,6 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
                     run_mode_convergence=run_convergence,
                     dirpath=self.dirpath,
                 )
-                sims.append(sim)
                 simulated_components.append(component)
             except Exception as err:
                 logger.error(
@@ -244,7 +242,7 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
                     normalized_loss += loss_db_per_cm * length
 
                 for i in range(0, len(length_sweep.loc[:, "length"])):
-                    propagation_loss.append(normalized_loss / eme_device_length * length_sweep.loc[i, "length"] / um)
+                    propagation_loss[i] += normalized_loss / eme_device_length * length_sweep.loc[i, "length"] / um
 
             if hasattr(self.recipe_setup, "additional_loss"):
                 for i in range(0, len(propagation_loss)):
@@ -271,14 +269,14 @@ class RoutingTaperEmeDesignRecipe(DesignRecipe):
                 optimal_lengths.append(length[ind] / um)
                 transmission_coefficients.append(s21[ind])
                 reflection_coefficients.append(s11[ind])
-            except StopIteration:
-                logger.warning(
-                    f"{component.name} cannot achieve specified routing loss of "
+            except Exception as err:
+                logger.warning(f"{err}\n"
+                    + f"{component.name} cannot achieve specified routing loss of "
                     + f"-{di.narrow_waveguide_routing_loss_per_cm}dB/cm. Use maximal length of {di.stop_length}um."
                 )
                 optimal_lengths.append(di.stop_length)
-                transmission_coefficients.append(s21[-1])
-                reflection_coefficients.append(s11[-1])
+                transmission_coefficients.append(s21[len(s21)-1])
+                reflection_coefficients.append(s11[len(s11)-1])
 
         # Log and save optimal lengths
         results = {
