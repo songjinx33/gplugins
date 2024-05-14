@@ -4,6 +4,8 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import pandas as pd
+
 from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
@@ -30,7 +32,16 @@ class Setup:
         if not isinstance(other, Setup):
             # Don't attempt to compare against unrelated types
             return NotImplemented
-        return self.__dict__ == other.__dict__
+
+        same = True
+        for k, v in self.__dict__.items():
+            if not k in other.__dict__:
+                return False
+            if isinstance(v, pd.DataFrame):
+                same = same and (v.to_dict(orient="list") == other.__dict__.get(k, False).to_dict(orient="list"))
+            else:
+                same = same and (v == other.__dict__.get(k, False))
+        return same
 
 
 class DesignRecipe:
