@@ -15,6 +15,8 @@ from gplugins.lumerical.convergence_settings import (
 from gplugins.design_recipe.DesignRecipe import eval_decorator
 from gplugins.lumerical.mode import LumericalModeSimulation
 import pandas as pd
+import numpy as np
+from gplugins.lumerical.config import um, cm
 
 class WaveguideSweepDesignIntent(BaseModel):
     r"""
@@ -115,3 +117,63 @@ class WaveguideSweepRecipe(DesignRecipe):
                                                                             "ng": ng,
                                                                             "TE_polarization": te_polarization})
         return True
+
+
+def grillot_strip_waveguide_loss_model(neff_vs_width: pd.DataFrame,
+                                       wavelength: float = 1.55,
+                                       Lc: float = 0.05,
+                                       sigma: float = 0.002,
+                                       n_core: float = 3.474,
+                                       n_clad: float = 1.444,
+                                       ) -> pd.DataFrame:
+    """
+    Get waveguide loss vs. width using the model from F. Grillot
+
+    Reference:
+        F. Grillot et al., “Influence of Waveguide Geometry on Scattering Loss Effects in Submicron Strip Silicon-on-Insulator Waveguides,”
+        IET Optoelectronics 2, no. 1 (February 1, 2008): 1–5, https://digital-library.theiet.org/content/journals/10.1049/iet-opt_20070001.
+
+    Parameters:
+        neff_vs_width: Effective index vs. waveguide width (um)
+                    | neff  | width |
+                    | float | float |
+        wavelength: Wavelength (um)
+        Lc: Correlation length (um)
+        sigma: Standard deviation in waveguide geometry (um)
+        n_core: Refractive index of core
+        n_clad: Refractive index of cladding
+
+    Returns:
+        Loss in dB/cm vs. width (um)
+        | loss_dB_per_cm | width |
+        | float          | float |
+    """
+
+    neff_r = np.real(neff_vs_width.loc[:, "neff"])
+    widths = neff_vs_width.loc[:, "width"] * um / cm
+    wavelength_cm = wavelength * um / cm
+    Lc = Lc * um / cm
+    sigma = sigma * um / cm
+
+    loss_dB_per_cm = []
+    for i in range(0, len(widths)):
+        neff = neff_r[i]
+        d = widths[i] / 2
+        k0 = 2 * np.pi / wavelength_cm
+
+        # Calculate coefficients
+        U = k0 * d * np.sqrt(n_core ** 2 - neff ** 2)
+        V = k0 * d * np.sqrt(n_core ** 2 - n_clad ** 2)
+        W = k0 * d * np.sqrt(neff ** 2 - n_clad ** 2)
+        g = (U ** 2 * V ** 2) / (1 + W)
+
+        # Define f(x)
+        delta = (n_core ** 2 - n_clad ** 2) / ( 2 * n_core ** 2)
+        gamma = n_clad * V / (n_core * W * np.sqrt(delta))
+        x = W * Lc / d
+
+        f = (x * np.sqrt(1 - x ** 2 + np.sqrt((1 + x ** 2) ** 2 + (2 * x ** 2 * gamma ** 2)))) / (np.sqrt((1 + x ** 2) ** 2 + (2*x**2*gamma**2)))
+        loss_dB_per_cm.append(4.34 * ((sigma ** 2) / (2 * np.pi * k0 * np.sqrt(2) * (d ** 4) * n_core)) * g * f)
+
+    return pd.DataFrame({"width": neff_vs_width.loc[:, "width"],
+                         "loss_dB_per_cm": loss_dB_per_cm})
