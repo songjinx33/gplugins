@@ -545,7 +545,7 @@ for i in range(0, len(ring_components)):
         mrm_recipes[0].dependencies.constituent_recipes[0].dependencies.constituent_recipes[0].override_recipe = False
 # Run recipes
 for mrm_recipe in mrm_recipes:
-    mrm_recipe.override_recipe = False
+    mrm_recipe.override_recipe = True
     mrm_recipe.eval()
 
 
