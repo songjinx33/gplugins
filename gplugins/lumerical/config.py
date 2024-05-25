@@ -23,6 +23,7 @@ MATERIAL_COLORS = [
 
 um = 1e-6
 cm = 1e-2
+nm = 1e-9
 marker_list = [
     "o",
     "v",
