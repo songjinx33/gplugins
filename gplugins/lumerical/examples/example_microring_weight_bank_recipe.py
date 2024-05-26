@@ -316,237 +316,240 @@ dopant_concentration_sets = {
     "carrier_fine_tune4": [1.6e18, 1e19, 1e20, 1.6e18, 1e19, 1e20],
     "carrier_fine_tune5": [1.2e18, 1e19, 1e20, 2e18, 1e19, 1e20],
 }
-set = "carrier_fine_tune2"
+sets = ["sweep2", "sweep1", "sweep3", "sweep4"]
 
-n = dopant_concentration_sets[set][0]
+for set in sets:
 
-np = dopant_concentration_sets[set][1]
-npp = dopant_concentration_sets[set][2]
+    n = dopant_concentration_sets[set][0]
 
-p = dopant_concentration_sets[set][3]
-pp = dopant_concentration_sets[set][4]
-ppp = dopant_concentration_sets[set][5]
+    np = dopant_concentration_sets[set][1]
+    npp = dopant_concentration_sets[set][2]
 
-layerstack_lumerical = LayerStack(
-    layers={
-        "clad": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "box": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=-3.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "core": LayerLevel(
-            layer=(1, 0),
-            thickness=core_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "slab90": LayerLevel(
-            layer=(3, 0),
-            thickness=slab_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "N": LayerLevel(
-            layer=LAYER.N,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=n,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NP": LayerLevel(
-            layer=LAYER.NP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=np,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NPP": LayerLevel(
-            layer=LAYER.NPP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=npp,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "P": LayerLevel(
-            layer=LAYER.P,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=p,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PP": LayerLevel(
-            layer=LAYER.PP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=pp,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PPP": LayerLevel(
-            layer=LAYER.PPP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=ppp,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "via": LayerLevel(
-            layer=LAYER.VIAC,
-            thickness=1.0,
-            zmin=core_thickness,
-            material="Aluminum",
-            mesh_order=4,
-            orientation="100",
-            layer_type="grow",
-        ),
-    }
-)
+    p = dopant_concentration_sets[set][3]
+    pp = dopant_concentration_sets[set][4]
+    ppp = dopant_concentration_sets[set][5]
 
-layerstack_no_doping = LayerStack(
-    layers={
-        "clad": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "box": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=-3.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "core": LayerLevel(
-            layer=(1, 0),
-            thickness=core_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "slab90": LayerLevel(
-            layer=(3, 0),
-            thickness=slab_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        )}
-)
+    layerstack_lumerical = LayerStack(
+        layers={
+            "clad": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=0.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "box": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=-3.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "core": LayerLevel(
+                layer=(1, 0),
+                thickness=core_thickness,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            ),
+            "slab90": LayerLevel(
+                layer=(3, 0),
+                thickness=slab_thickness,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            ),
+            "N": LayerLevel(
+                layer=LAYER.N,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=n,
+                background_doping_ion="n",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "NP": LayerLevel(
+                layer=LAYER.NP,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=np,
+                background_doping_ion="n",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "NPP": LayerLevel(
+                layer=LAYER.NPP,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=npp,
+                background_doping_ion="n",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "P": LayerLevel(
+                layer=LAYER.P,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=p,
+                background_doping_ion="p",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "PP": LayerLevel(
+                layer=LAYER.PP,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=pp,
+                background_doping_ion="p",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "PPP": LayerLevel(
+                layer=LAYER.PPP,
+                thickness=core_thickness,
+                zmin=core_thickness,
+                material="si",
+                mesh_order=4,
+                background_doping_concentration=ppp,
+                background_doping_ion="p",
+                orientation="100",
+                layer_type="doping",
+            ),
+            "via": LayerLevel(
+                layer=LAYER.VIAC,
+                thickness=1.0,
+                zmin=core_thickness,
+                material="Aluminum",
+                mesh_order=4,
+                orientation="100",
+                layer_type="grow",
+            ),
+        }
+    )
 
-# 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
-charge_settings = [SimulationSettingsLumericalCharge(x=c.x,
-                                                    y=c.y,
-                                                    dimension="2D Y-Normal",
-                                                    xspan=width_slab + 1.0) for c in pn_components]
-charge_convergence_settings = ConvergenceSettingsLumericalCharge(
-    global_iteration_limit=500,
-    gradient_mixing="fast")
-mode_settings = [SimulationSettingsLumericalMode(injection_axis="2D Y normal",
-                                                wavl_pts=11,
-                                                x=settings.x,
-                                                y=settings.y,
-                                                z=settings.z,
-                                                xspan=settings.xspan,
-                                                yspan=settings.yspan,
-                                                zspan=settings.zspan,
-                                                target_mode=3
-                                                ) for settings in charge_settings]
-mode_convergence_settings = ConvergenceSettingsLumericalMode()
+    layerstack_no_doping = LayerStack(
+        layers={
+            "clad": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=0.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "box": LayerLevel(
+                layer=(99999, 0),
+                thickness=3.0,
+                zmin=-3.0,
+                material="sio2",
+                sidewall_angle=0.0,
+                mesh_order=9,
+                layer_type="background",
+            ),
+            "core": LayerLevel(
+                layer=(1, 0),
+                thickness=core_thickness,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            ),
+            "slab90": LayerLevel(
+                layer=(3, 0),
+                thickness=slab_thickness,
+                zmin=0.0,
+                material="si",
+                sidewall_angle=2.0,
+                width_to_z=0.5,
+                mesh_order=2,
+                layer_type="grow",
+                info={"active": True},
+            )}
+    )
 
-# 4. CREATE AND RUN DESIGN RECIPES
-mrm_recipes = []
-for i in range(0, len(ring_components)):
-    mrm_recipes.append(PNMicroringModulatorRecipe(component=ring_components[i],
-                                            layer_stack=layerstack_lumerical,
-                                            pn_design_intent=design_intent,
-                                            mode_simulation_setup=mode_settings[i],
-                                            mode_convergence_setup=mode_convergence_settings,
-                                            charge_simulation_setup=charge_settings[i],
-                                            charge_convergence_setup=charge_convergence_settings,
-                                            fdtd_simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-                                            fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-                                            interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
-                                            dirpath=dirpath,
-                                            dependencies=[PNJunctionRecipe(component=ring_components[i].named_references["rotate_1"].parent,
-                                                             layer_stack=layerstack_lumerical,
-                                                             design_intent=pn_design_intent,
-                                                             mode_simulation_setup=mode_settings[i],
-                                                             mode_convergence_setup=mode_convergence_settings,
-                                                             charge_simulation_setup=charge_settings[i],
-                                                             charge_convergence_setup=charge_convergence_settings,
-                                                             dirpath=dirpath),
-                                        FdtdRecipe(component=ring_components[i].named_references["coupler_ring_1"].parent,
-                                                   layer_stack=layerstack_no_doping,
-                                                   simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
-                                                   convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
-                                                   dirpath=dirpath)]
-                                            )
-                       )
-    if i == 0:
-        mrm_recipes[0].dependencies.constituent_recipes[0].override_recipe = False
-        mrm_recipes[0].dependencies.constituent_recipes[0].dependencies.constituent_recipes[0].override_recipe = False
-# Run recipes
-for mrm_recipe in mrm_recipes:
-    mrm_recipe.override_recipe = True
-    mrm_recipe.eval()
+    # 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
+    charge_settings = [SimulationSettingsLumericalCharge(x=c.x,
+                                                        y=c.y,
+                                                        dimension="2D Y-Normal",
+                                                        xspan=width_slab + 1.0) for c in pn_components]
+    charge_convergence_settings = ConvergenceSettingsLumericalCharge(
+        global_iteration_limit=500,
+        gradient_mixing="fast")
+
+    mode_settings = [SimulationSettingsLumericalMode(injection_axis="2D Y normal",
+                                                    wavl_pts=11,
+                                                    x=settings.x,
+                                                    y=settings.y,
+                                                    z=settings.z,
+                                                    xspan=settings.xspan,
+                                                    yspan=settings.yspan,
+                                                    zspan=settings.zspan,
+                                                    target_mode=1 if (set == "sweep4") else 3,
+                                                    ) for settings in charge_settings]
+    mode_convergence_settings = ConvergenceSettingsLumericalMode()
+
+    # 4. CREATE AND RUN DESIGN RECIPES
+    mrm_recipes = []
+    for i in range(0, len(ring_components)):
+        mrm_recipes.append(PNMicroringModulatorRecipe(component=ring_components[i],
+                                                layer_stack=layerstack_lumerical,
+                                                pn_design_intent=design_intent,
+                                                mode_simulation_setup=mode_settings[i],
+                                                mode_convergence_setup=mode_convergence_settings,
+                                                charge_simulation_setup=charge_settings[i],
+                                                charge_convergence_setup=charge_convergence_settings,
+                                                fdtd_simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+                                                fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+                                                interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
+                                                dirpath=dirpath,
+                                                dependencies=[PNJunctionRecipe(component=ring_components[i].named_references["rotate_1"].parent,
+                                                                 layer_stack=layerstack_lumerical,
+                                                                 design_intent=pn_design_intent,
+                                                                 mode_simulation_setup=mode_settings[i],
+                                                                 mode_convergence_setup=mode_convergence_settings,
+                                                                 charge_simulation_setup=charge_settings[i],
+                                                                 charge_convergence_setup=charge_convergence_settings,
+                                                                 dirpath=dirpath),
+                                            FdtdRecipe(component=ring_components[i].named_references["coupler_ring_1"].parent,
+                                                       layer_stack=layerstack_no_doping,
+                                                       simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+                                                       convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+                                                       dirpath=dirpath)]
+                                                )
+                           )
+        if i == 0:
+            mrm_recipes[0].dependencies.constituent_recipes[0].override_recipe = False
+            mrm_recipes[0].dependencies.constituent_recipes[0].dependencies.constituent_recipes[0].override_recipe = False
+    # Run recipes
+    for mrm_recipe in mrm_recipes:
+        mrm_recipe.override_recipe = False
+        mrm_recipe.eval()
 
 
 # Build ring circuit
