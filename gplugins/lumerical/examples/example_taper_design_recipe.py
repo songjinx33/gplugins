@@ -198,14 +198,20 @@ for i in range(0, len(convergence_results)):
         plt.figure()
         mesh_cells_per_wavl = cr.overall_convergence_data.mesh_cells
         num_cells = cr.overall_convergence_data.num_cells
+
+        mesh_cells_per_wavl = mesh_cells_per_wavl[:-1]
+        num_cells = num_cells[:-1]
+
         s21 = cr.overall_convergence_data.s21
         s11 = cr.overall_convergence_data.s11
 
         s21 = np.array(s21)
         s11 = np.array(s11)
 
-        s21 = s21[-1] - s21
-        s11 = s11[-1] - s11
+        s21 = abs(s21[-1] - s21)
+        s11 = abs(s11[-1] - s11)
+        s21 = s21[:-1]
+        s11 = s11[:-1]
 
         plt.plot(list(range(0, len(mesh_cells_per_wavl))), s21, marker=marker_list[0])
         plt.plot(list(range(0, len(mesh_cells_per_wavl))), s11, marker=marker_list[1])
@@ -227,12 +233,15 @@ for i in range(0, len(convergence_results)):
         # Plot mode convergence
         plt.figure()
         modes = cr.mode_convergence_data.modes
+        modes = modes[:-1]
 
         s21 = np.array(cr.mode_convergence_data.s21)
         s11 = np.array(cr.mode_convergence_data.s11)
 
-        s21 = s21[-1] - s21
-        s11 = s11[-1] - s11
+        s21 = abs(s21[-1] - s21)
+        s11 = abs(s11[-1] - s11)
+        s21 = s21[:-1]
+        s11 = s11[:-1]
 
         plt.plot(modes, s21, marker=marker_list[0])
         plt.plot(modes, s11, marker=marker_list[1])
@@ -246,16 +255,22 @@ for i in range(0, len(convergence_results)):
         # Mesh convergence
         plt.figure()
         mesh = cr.mesh_convergence_data.mesh_accuracy
+        mesh = mesh[:-1]
 
         s21 = np.array([v[0] for v in cr.mesh_convergence_data.S21])
         s11 = np.array([v[0] for v in cr.mesh_convergence_data.S11])
         s12 = np.array([v[0] for v in cr.mesh_convergence_data.S12])
         s22 = np.array([v[0] for v in cr.mesh_convergence_data.S22])
 
-        s21 = s21[-1] - s21
-        s11 = s11[-1] - s11
-        s12 = s12[-1] - s12
-        s22 = s22[-1] - s22
+        s21 = abs(s21[-1] - s21)
+        s11 = abs(s11[-1] - s11)
+        s12 = abs(s12[-1] - s12)
+        s22 = abs(s22[-1] - s22)
+
+        s21 = s21[:-1]
+        s11 = s11[:-1]
+        s22 = s22[:-1]
+        s12 = s12[:-1]
 
         plt.plot(mesh, s11, marker=marker_list[0])
         plt.plot(mesh, s12, marker=marker_list[1])
@@ -271,16 +286,22 @@ for i in range(0, len(convergence_results)):
         # Field intensity convergence
         plt.figure()
         thresholds = cr.field_intensity_convergence_data.thresholds
+        thresholds = thresholds[:-1]
 
         s21 = np.array([v[0] for v in cr.field_intensity_convergence_data.S21])
         s11 = np.array([v[0] for v in cr.field_intensity_convergence_data.S11])
         s12 = np.array([v[0] for v in cr.field_intensity_convergence_data.S12])
         s22 = np.array([v[0] for v in cr.field_intensity_convergence_data.S22])
 
-        s21 = s21[-1] - s21
-        s11 = s11[-1] - s11
-        s12 = s12[-1] - s12
-        s22 = s22[-1] - s22
+        s21 = abs(s21[-1] - s21)
+        s11 = abs(s11[-1] - s11)
+        s12 = abs(s12[-1] - s12)
+        s22 = abs(s22[-1] - s22)
+
+        s21 = s21[:-1]
+        s11 = s11[:-1]
+        s22 = s22[:-1]
+        s12 = s12[:-1]
 
         plt.plot(thresholds, s11, marker=marker_list[0])
         plt.plot(thresholds, s12, marker=marker_list[1])
@@ -300,6 +321,8 @@ for i in range(0, len(convergence_results)):
 fig, (ax1, ax2) = plt.subplots(2)
 for i in range(0, len(recipe_results)):
     wavl = recipe_results[i].sparameters.wavelength * um / nm
+
+
 
     s21 = 10 * np.log10( abs(recipe_results[i].sparameters.S21) ** 2)
     s11 = 10 * np.log10(abs(recipe_results[i].sparameters.S11) ** 2)
