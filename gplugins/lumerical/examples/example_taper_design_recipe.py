@@ -395,11 +395,49 @@ for i in range(0, len(eme_recipe.recipe_results.mode_coupling)):
     plt.grid("on")
     plt.legend()
 
+# Get propagation loss
+from gdsfactory.typings import WidthTypes
+import typing
+di = design_intent
 
+eme_device_length = 5
+components = [
+    taper_cross_section(
+        cross_section1=narrow_waveguide_cross_section,
+        cross_section2=wide_waveguide_cross_section,
+        length=eme_device_length,  # um
+        width_type=wtype,
+    )
+    for wtype in typing.get_args(WidthTypes)
+]
+geometries = [wtype for wtype in typing.get_args(WidthTypes)]
+length_sweep_prop_loss = []
+for component in components:
+    propagation_loss = [0] * di.num_pts
+    if hasattr(eme_recipe.recipe_setup, "waveguide_loss_model"):
+        wlm = eme_recipe.recipe_setup.waveguide_loss_model
+
+        pts = component.polygons[0].points
+        # Iterate in coordinates from input of taper to end of taper and average the width between two points
+        # Then, calculate loss for normalized length of device
+        normalized_loss = 0
+        for i in range(0, np.argmin(np.abs(pts[:, 0] - eme_device_length))):
+            width = np.abs(pts[i, 1] + pts[i + 1, 1])
+            length = np.abs(pts[i, 0] - pts[i + 1, 0]) * um / cm
+
+            loss_db_per_cm = np.interp(width, wlm.loc[:, "width"],
+                                       wlm.loc[:, "loss"])
+            normalized_loss += loss_db_per_cm * length
+
+        length_sweep_prop_loss.append(
+            normalized_loss / eme_device_length * np.linspace(di.start_length,
+                                                              di.stop_length,
+                                                              di.num_pts))
 
 # Compare simulation and experimental length sweeps
 eme_recipe.recipe_results.length_sweeps.pop(0) # Remove elliptical taper
 eme_recipe.recipe_results.components_settings.pop(0) # Remove elliptical taper
+length_sweep_prop_loss.pop(0) # Remove elliptical taper
 
 for i in range(0, len(eme_recipe.recipe_results.length_sweeps)):
     plt.figure()
@@ -407,8 +445,15 @@ for i in range(0, len(eme_recipe.recipe_results.length_sweeps)):
     # Plot simulated taper
     plt.plot(eme_recipe.recipe_results.length_sweeps[i]["length"]*1e6,
              10 * np.log10(abs(eme_recipe.recipe_results.length_sweeps[i]["s21"]) ** 2),
-             marker=marker_list[i],
-             label="Simulation")
+             label="Simulation - Total Loss")
+
+    plt.plot(eme_recipe.recipe_results.length_sweeps[i]["length"] * 1e6,
+             -length_sweep_prop_loss[i],
+             label="Simulation - Taper Propagation Loss")
+
+    plt.plot(eme_recipe.recipe_results.length_sweeps[i]["length"] * 1e6,
+             10 * np.log10(abs(eme_recipe.recipe_results.length_sweeps[i]["s21"]) ** 2) + length_sweep_prop_loss[i],
+             label="Simulation - Taper Reflection\n+ Modal Crosstalk Loss")
 
     # Plot experimental taper
     exp_file = experimental_result_dir / experimental_result_files[i]
@@ -422,15 +467,15 @@ for i in range(0, len(eme_recipe.recipe_results.length_sweeps)):
     # Plot waveguide propagation loss
     pos = np.linspace(0, 200, 201)
     plt.plot(pos, -pos * um / cm * design_intent.narrow_waveguide_routing_loss_per_cm,
-             marker=marker_list[i+1], label=f"Propagation Loss {design_intent.narrow_waveguide_routing_loss_per_cm}dB/cm")
+             label=f"Narrow Waveguide\nPropagation Loss {design_intent.narrow_waveguide_routing_loss_per_cm}dB/cm")
 
     plt.xlabel("Length (um)")
     plt.ylabel("Insertion Loss (dB)")
     plt.title(f"Length Sweep - {geometry[i]}")
     plt.grid("on")
     plt.xlim([0, 100])
-    plt.ylim([-1.8, 0.1])
-    plt.legend(loc="lower center")
+    plt.ylim([-1.8, 0.1 ])
+    plt.legend(loc="lower right")
     plt.tight_layout()
 
 plt.show()
