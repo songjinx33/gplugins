@@ -84,6 +84,7 @@ class FdtdRecipe(DesignRecipe):
         self.recipe_results.sparameters = sim.write_sparameters(
             overwrite=True, delete_fsp_files=False, plot=True
         )
+        self.recipe_results.filepath_dat = sim.filepath_dat
 
         success = True
         return success

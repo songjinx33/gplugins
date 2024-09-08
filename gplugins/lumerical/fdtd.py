@@ -55,6 +55,7 @@ class LumericalFdtdSimulation(Simulation):
         dirpath: Root directory where simulations are saved. A sub-directory labeled with the class name and hash is
                     be where simulation files are saved.
         filepath_npz: S-parameter output filepath (npz)
+        filepath_dat: S-parameter output filepath (dat)
         filepath_fsp: FDTD simulation output filepath (fsp)
         convergence_results: Dynamic object used to store convergence results
             simulation_settings: FDTD simulation settings
@@ -304,7 +305,7 @@ class LumericalFdtdSimulation(Simulation):
         # Define filepaths
         self.filepath_npz = get_sparameters_path(
             component=component,
-            dirpath=self.simulation_dirpath.resolve(),
+            dirpath=self.simulation_dirpath,
             layer_stack=layer_stack,
             **settings,
         )
@@ -361,14 +362,15 @@ class LumericalFdtdSimulation(Simulation):
         # Fit material models
         for layer_name in layer_stack.to_dict():
             s.select("layer group")
-            material_name = s.getlayer(layer_name, "pattern material")
             try:
+                material_name = s.getlayer(layer_name, "pattern material")
+
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
             except Exception:
                 logger.warning(
-                    f"Material {material_name} cannot be found in database, skipping material fit."
+                    f"Material {layer_name} cannot be found in database, skipping material fit."
                 )
 
         # Get current FDTD region bounds. When adding ports, if the port is outside the FDTD region, correct FDTD bounds
@@ -537,6 +539,7 @@ class LumericalFdtdSimulation(Simulation):
         """
         s = self.session
 
+        self.filepath_dat = self.filepath_npz.with_suffix(".dat")
         filepath = self.filepath_npz.with_suffix(".dat")
         filepath_sim_settings = filepath.with_suffix(".yml")
         filepath_csv = self.filepath_npz.with_suffix(".csv")
@@ -554,8 +557,10 @@ class LumericalFdtdSimulation(Simulation):
         s.deletesweep("s-parameter sweep")
         s.addsweep(3)
         s.setsweep("s-parameter sweep", "Excite all ports", 1)
+        s.setsweep("s-parameter sweep", "Calculate group delay", 1)
         s.setsweep("S sweep", "auto symmetry", True)
         s.runsweep()
+        s.loadsweep()
         sp = s.getsweepresult("s-parameter sweep", "S parameters")
         s.exportsweep("s-parameter sweep", str(filepath.absolute()))
         logger.info(f"Writing Sparameters to {str(filepath.absolute())!r}")
@@ -934,7 +939,7 @@ class LumericalFdtdSimulation(Simulation):
         self,
         max_mesh_accuracy: int = 5,
         wavl_points: int = 1,
-        cpu_usage_percent: float = 1,
+        cpu_usage_percent: float = 0.4,
         min_cpus_per_sim: int = 8,
         delete_fsp_files: bool = False,
         verbose: bool = False,
@@ -1115,8 +1120,10 @@ class LumericalFdtdSimulation(Simulation):
     def update_field_intensity_threshold(
         self,
         port_modes: dict | None = None,
-        mesh_accuracy: int = 4,
+        mesh_accuracy: int = 3,
         wavl_points: int = 1,
+        cpu_usage_percent: float = 0.4,
+        min_cpus_per_sim: int = 8,
         plot: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1139,6 +1146,17 @@ class LumericalFdtdSimulation(Simulation):
         s = self.session
         ss = self.simulation_settings
         cs = self.convergence_settings
+
+        # Set resources
+        total_cpus = multiprocessing.cpu_count()
+        cpus_free = int(np.floor(total_cpus * cpu_usage_percent))
+        capacity = int(np.floor(cpus_free / min_cpus_per_sim)) or 1
+        cpus_per_sim = min_cpus_per_sim if capacity > 1 else cpus_free
+        s.setresource("FDTD", 1, "processes", cpus_per_sim)
+        s.setresource("FDTD", 1, "capacity", capacity)
+        logger.info(
+            f"Using {cpus_per_sim} cores per simulation with {capacity} simulations running simultaneously."
+        )
 
         # Save original sim settings
         orig_mesh_accuracy = s.getnamed("FDTD", "mesh accuracy")

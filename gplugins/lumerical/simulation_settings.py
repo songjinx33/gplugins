@@ -153,7 +153,7 @@ material_name_to_lumerical_ele_therm_default = {
     "cu": "Cu (Copper) - CRC",
     "air": "Air",
     "TiN": "TiN - Palik",
-    "Aluminum": "Al (Aluminium) - Palik",
+    "Aluminum": "Al (Aluminium) - CRC",
 }
 
 
@@ -248,7 +248,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     port_extension: float = 5.0
     port_translation: float = 0.0
     material_fit_tolerance: float = 0.001
-    mesh_accuracy: int = 1
+    mesh_accuracy: int = 4
     wavelength_start: float = 1.5
     wavelength_stop: float = 1.6
     wavelength_points: int = 200
@@ -258,7 +258,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     field_profile_samples: int = 15
     distance_monitors_to_pml: float = 0.5
     material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
-    port_field_intensity_threshold: float = 1e-5
+    port_field_intensity_threshold: float = 1e-6
 
     class Config:
         """pydantic basemodel config."""
@@ -276,8 +276,8 @@ class SimulationSettingsLumericalCharge(BaseModel):
         solver_mode: CHARGE solver mode
         simulation_temperature: Temperature in K
         temperature_dependence: Set this to have temperature dependent simulation (cross coupling)
-        min_edge_length: Minimum edge length in m for a triangle or tetrahedron mesh
-        max_edge_length: Maximum edge length in m  for a triangle or tetrahedron mesh
+        min_edge_length: Minimum edge length in um for a triangle or tetrahedron mesh
+        max_edge_length: Maximum edge length in um  for a triangle or tetrahedron mesh
         max_refine_steps: Maximum number of vertices that can be added to the mesh at each mesh refinement stage
         min_time_step: Minimum time step in seconds (only for transient simulations)
         max_time_step: Maximum time step in seconds (only for transient simulations)
@@ -459,3 +459,21 @@ class SimulationSettingsLumericalMode(BaseModel):
         arbitrary_types_allowed = True
 
 LUMERICAL_MODE_SIMULATION_SETTINGS = SimulationSettingsLumericalMode()
+
+class SimulationSettingsLumericalInterconnect(BaseModel):
+    """
+    Lumerical INTERCONNECT simulation settings.
+
+    Parameters:
+        wavl_start: Start wavelength (um)
+        wavl_end: End wavelength (um)
+        wavl_pts: Number of wavelength points
+    """
+    wavl_start: float = 1.5
+    wavl_end: float = 1.6
+    wavl_pts: int = 1e5
+
+    class Config:
+        arbitrary_types_allowed = True
+
+LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS = SimulationSettingsLumericalInterconnect()

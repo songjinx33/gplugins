@@ -208,7 +208,7 @@ class LumericalModeSimulation(Simulation):
                 s.setanalysis("bend location y", ss.bend_location_y)
                 s.setanalysis("bend location z", ss.bend_location_z)
 
-        s.save(str(self.simulation_dirpath / f"{self.component.name}.lms"))
+        s.save(str(self.simulation_dirpath.resolve() / f"{self.component.name}.lms"))
 
         # Run convergence testing if no convergence results are available or user wants to override convergence results
         # or if setup has changed
@@ -358,8 +358,7 @@ class LumericalModeSimulation(Simulation):
             plt.ylabel("Magnitude")
             plt.grid("on")
             plt.legend()
-            plt.savefig(str(self.simulation_dirpath / "mesh_convergence.png"))
-            plt.show()
+            plt.savefig(str(self.simulation_dirpath.resolve() / "mesh_convergence.png"))
 
         convergence_results = pd.DataFrame(
             {
@@ -656,8 +655,7 @@ class LumericalModeSimulation(Simulation):
             plt.ylabel("Magnitude")
             plt.grid("on")
             plt.legend()
-            plt.savefig(str(self.simulation_dirpath / "efield_intensity_threshold_convergence.png"))
-            plt.show()
+            plt.savefig(str(self.simulation_dirpath.resolve() / "efield_intensity_threshold_convergence.png"))
 
         convergence_results = pd.DataFrame(
             {
@@ -704,7 +702,7 @@ class LumericalModeSimulation(Simulation):
         ax1.set_xlabel("X/Y (um)")
         ax1.set_ylabel("Z (um)")
         fig1.colorbar(im)
-        fig1.savefig(str(self.simulation_dirpath / "index.png"))
+        fig1.savefig(str(self.simulation_dirpath.resolve() / "index.png"))
         plt.show()
 
     def get_neff_vs_wavelength(self) -> pd.DataFrame:
@@ -746,7 +744,7 @@ class LumericalModeSimulation(Simulation):
         plt.xlabel("Wavelength (um)")
         plt.ylabel("Effective Index")
         plt.grid("on")
-        plt.savefig(str(self.simulation_dirpath / "neff_vs_wavelength.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / "neff_vs_wavelength.png"))
         plt.show()
 
     def get_ng_vs_wavelength(self) -> pd.DataFrame:
@@ -788,7 +786,7 @@ class LumericalModeSimulation(Simulation):
         plt.xlabel("Wavelength (um)")
         plt.ylabel("Group Index")
         plt.grid("on")
-        plt.savefig(str(self.simulation_dirpath / "ng_vs_wavl.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / "ng_vs_wavl.png"))
         plt.show()
 
     def get_dispersion_vs_wavelength(self) -> pd.DataFrame:
@@ -830,6 +828,6 @@ class LumericalModeSimulation(Simulation):
         plt.xlabel("Wavelength (um)")
         plt.ylabel("Dispersion (s/m/m)")
         plt.grid("on")
-        plt.savefig(str(self.simulation_dirpath / "dispersion_vs_wavl.png"))
+        plt.savefig(str(self.simulation_dirpath.resolve() / "dispersion_vs_wavl.png"))
         plt.show()
 
