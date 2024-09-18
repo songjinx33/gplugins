@@ -191,10 +191,16 @@ def draw_geometry(
     s.loadgdsfile(str(gdspath))
     try:
         s.loadprocessfile(str(process_file_path))
+        print("Process file loaded successfully.")
+
     except Exception as err:
-        raise Exception(
-            f"{err}\nProcess file cannot be imported. Likely causes are dopants in the process file or syntax errors."
-        ) from err
+        error_message = str(err)
+        if "Please import your process file using the layer builder editor window for more options." in error_message:
+            print(f"Warning: {err}. Skipping layer builder import error.")
+        else:
+            raise Exception(
+                f"{err}\nProcess file cannot be imported. Likely causes are dopants in the process file or syntax errors."
+            ) from err
 
 
 class Results:
