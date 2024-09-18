@@ -445,19 +445,24 @@ class LumericalFdtdSimulation(Simulation):
             port_ymax = s.getnamed(p, "y max")
             port_zmax = s.getnamed(p, "z max")
             if port_xmin < fdtd_xmin:
-                fdtd_xmin = port_xmin - ss.port_margin * um
+                # fdtd_xmin = port_xmin - ss.port_margin * um
+                fdtd_xmin = port_xmin-2*um
                 s.setnamed("FDTD", "x min", fdtd_xmin)
             if port_ymin < fdtd_ymin:
-                fdtd_ymin = port_ymin - ss.port_margin * um
+                # fdtd_ymin = port_ymin - ss.port_margin * um
+                fdtd_ymin = port_ymin-2*um
                 s.setnamed("FDTD", "y min", fdtd_ymin)
             if port_zmin < fdtd_zmin:
-                fdtd_zmin = port_zmin - ss.port_margin * um
+                # fdtd_zmin = port_zmin - ss.port_margin * um
+                fdtd_zmin = port_zmin
                 s.setnamed("FDTD", "z min", fdtd_zmin)
             if port_xmax > fdtd_xmax:
-                fdtd_xmax = port_xmax + ss.port_margin * um
+                # fdtd_xmax = port_xmax + ss.port_margin * um
+                fdtd_xmax = fdtd_xmax+2*um
                 s.setnamed("FDTD", "x max", fdtd_xmax)
             if port_ymax > fdtd_ymax:
-                fdtd_ymax = port_ymax + ss.port_margin * um
+                # fdtd_ymax = port_y"max + ss.port_margin * um
+                fdtd_ymax = fdtd_ymax+2*um
                 s.setnamed("FDTD", "y max", fdtd_ymax)
             if port_zmax > fdtd_zmax:
                 fdtd_zmax = port_zmax + ss.port_margin * um
