@@ -388,7 +388,8 @@ class LumericalFdtdSimulation(Simulation):
             zmin = layer_to_zmin[port.layer]
             thickness = layer_to_thickness[port.layer]
             z = (zmin + thickness) / 2
-            zspan = 2 * ss.port_margin + thickness
+            # zspan = 2 * ss.port_margin + thickness
+            zspan = ss.port_margin + thickness
 
             s.addport()
             p = f"FDTD::ports::port {i + 1}"
@@ -465,7 +466,8 @@ class LumericalFdtdSimulation(Simulation):
                 fdtd_ymax = fdtd_ymax+2*um
                 s.setnamed("FDTD", "y max", fdtd_ymax)
             if port_zmax > fdtd_zmax:
-                fdtd_zmax = port_zmax + ss.port_margin * um
+                # fdtd_zmax = port_zmax + ss.port_margin * um
+                fdtd_zmax = port_zmax
                 s.setnamed("FDTD", "z max", fdtd_zmax)
 
             s.setnamed(p, "name", port.name)
