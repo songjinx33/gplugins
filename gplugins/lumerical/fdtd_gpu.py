@@ -394,8 +394,8 @@ class LumericalFdtdSimulation(Simulation):
             p = f"FDTD::ports::port {i + 1}"
             s.setnamed(p, "z", z * um)
             s.setnamed(p, "z span", zspan * um)
-            s.setnamed(p, "frequency dependent profile", ss.frequency_dependent_profile)
             s.setnamed(p, "number of field profile samples", ss.field_profile_samples)
+            s.setnamed(p, "frequency dependent profile", ss.frequency_dependent_profile)
 
             deg = port.orientation
             if -45 <= deg <= 45:
