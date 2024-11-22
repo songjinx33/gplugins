@@ -1,4 +1,5 @@
 from typing import Literal
+from typing import Optional
 
 from gdsfactory.cross_section import LayerSpec
 from pydantic import BaseModel
@@ -260,7 +261,11 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     material_name_to_lumerical: dict[str, str] = material_name_to_lumerical_default
     port_field_intensity_threshold: float = 1e-6
     express_mode: bool = True
-
+    
+    material_script_read: bool = False  # Default to False
+    material_script_file: Optional[str] = None  # Optional path to the material script file
+    
+    
     class Config:
         """pydantic basemodel config."""
 

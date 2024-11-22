@@ -360,13 +360,29 @@ class LumericalFdtdSimulation(Simulation):
             ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath.resolve()
         )
         draw_geometry(s, gdspath, process_file_path)
-               
+        
+        # Load material file
+        if ss.material_script_read:
+            if not ss.material_script_file:
+                raise ValueError("Material script file path must be specified when material_script_read is True.")
+            
+            try:
+                with open(ss.material_script_file, 'r') as script_file:
+                    script_code = script_file.read()
+                s.eval(script_code)
+                print(f"Successfully executed the script from {ss.material_script_file}.")
+            except Exception as e:
+                raise RuntimeError(f"Failed to execute the material script: {e}")
+
         # Fit material models
         for layer_name in layer_stack.to_dict():
             s.select("layer group")
             try:
                 material_name = s.getlayer(layer_name, "pattern material")
-
+                logger.info(f"Material retrieved for {layer_name}: {material_name}")
+                mapped_material = ss.material_name_to_lumerical.get(material_name, None)
+                logger.info(f"Mapped material for {layer_name}: {mapped_material}")                
+                
                 s.setmaterial(material_name, "wavelength min", ss.wavelength_start * um)
                 s.setmaterial(material_name, "wavelength max", ss.wavelength_stop * um)
                 s.setmaterial(material_name, "tolerance", ss.material_fit_tolerance)
