@@ -50,6 +50,7 @@ def layerstack_to_lbr(
 
     layers = SubElement(layer_builder, "layers")
     doping_layers = SubElement(layer_builder, "doping_layers")
+
     for layer_name, layer_info in layerstack.to_dict().items():
         if layer_info["layer_type"] == "grow":
             process = "Grow"
@@ -70,6 +71,9 @@ def layerstack_to_lbr(
         if process == "Grow" or process == "Background":
             layer = SubElement(layers, "layer")
 
+            logger.info(f"{layer_name} start")
+            logger.info(f'{layer_info["layer"]}')
+
             # Default params
             layer_params = {
                 "enabled": "1",
@@ -82,7 +86,8 @@ def layerstack_to_lbr(
                 "layer_name": f'{layer_info["layer"][0]}:{layer_info["layer"][1]}',
                 "start_position": f'{layer_info["zmin"] * um}',
                 "thickness": f'{layer_info["thickness"] * um}',
-                "process": f"{process}",
+                # "process": f"{process}",
+                "process": f"Grow",
                 "sidewall_angle": f'{90 - layer_info["sidewall_angle"]}',
                 "pattern_growth_delta": f"{layer_info['bias'] * um}"
                 if layer_info["bias"]
@@ -91,7 +96,12 @@ def layerstack_to_lbr(
 
             for param, val in layer_params.items():
                 layer.set(param, val)
-
+ 
+            # if layer_info == "None":
+            #     pass  
+            # else:
+            #     layer.set("layer_name", f'{layer_info["layer"][0]}:{layer_info["layer"][1]}')  
+                         
             if process == "Grow":
                 layer.set(
                     "pattern_material",
@@ -188,6 +198,11 @@ def draw_geometry(
     s.set("x", 0)
     s.set("y", 0)
     s.set("z", 0)
+    s.set("base mesh order", 5)
+    s.set("x span", 400e-6)
+    s.set("y span", 400e-6)
+
+
     s.loadgdsfile(str(gdspath))
     try:
         s.loadprocessfile(str(process_file_path))
