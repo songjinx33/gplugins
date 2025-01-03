@@ -348,7 +348,6 @@ class LumericalFdtdSimulation_port(Simulation):
             )
             raise e
         
-        self.input_port = input_port
         self.session = s = session or lumapi.FDTD(hide=hide)
         s.newproject()
         s.selectall()
